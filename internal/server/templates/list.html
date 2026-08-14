@@ -1,0 +1,108 @@
+{{define "list_rows"}}
+{{if .Folders}}
+{{range .Folders}}
+<tr id="folder-{{.ID}}">
+  <td data-label="文件夹">
+    <div class="folder-name">
+      <span class="folder-icon" aria-hidden="true">ID</span>
+      <a href="/artworks/{{urlquery .ID}}" class="folder-link">{{.Name}}</a>
+    </div>
+  </td>
+  <td data-label="文件数"><span class="badge">{{.FileCount}} 个文件</span></td>
+  <td class="size-cell" data-label="大小">{{formatSize .Size}}</td>
+  <td data-label="创建时间">{{formatTime .CreatedAt}}</td>
+  <td data-label="修改时间">{{formatTime .ModifiedAt}}</td>
+  <td data-label="操作">
+    <div class="action-buttons">
+      <button class="action-btn redownload"
+        hx-on:click="location.href='/download?taskName={{urlquery .ID}}&redownload=1'">重新下载</button>
+      <button class="action-btn delete"
+        hx-delete="/partials/folders/{{urlpath .ID}}"
+        hx-include="#listFilters"
+        hx-vals='page:{{$.Page}}'
+        hx-target="#tableBody"
+        hx-swap="innerHTML settle:0s"
+        hx-indicator="#tableContainer"
+        hx-confirm="确定删除文件夹 {{.Name}}？此操作不可恢复！">删除</button>
+    </div>
+  </td>
+</tr>
+{{end}}
+{{else}}
+<tr class="is-empty">
+  <td colspan="6">
+    <div class="table-empty">
+      <div class="table-empty-mark" aria-hidden="true"></div>
+      <p class="table-empty-title">暂无数据</p>
+      <p class="table-empty-hint">没有符合条件的文件夹，试试清空筛选或换个关键词。</p>
+    </div>
+  </td>
+</tr>
+{{end}}
+{{end}}
+
+{{define "stats"}}
+<div class="stat-card">
+  <div class="label">总文件夹数</div>
+  <div class="value">{{.TotalFolders}}</div>
+</div>
+<div class="stat-card">
+  <div class="label">总文件数</div>
+  <div class="value">{{.TotalFiles}}</div>
+</div>
+<div class="stat-card">
+  <div class="label">总大小</div>
+  <div class="value">{{formatSize .TotalSize}}</div>
+</div>
+<div class="stat-card">
+  <div class="label">当前页数</div>
+  <div class="value">{{.Page}} / {{.TotalPages}}</div>
+</div>
+{{end}}
+
+{{define "pagination"}}
+{{if gt .TotalPages 0}}
+<button class="page-btn"
+  hx-get="/partials/list?{{.Query}}&page=1"
+  hx-target="#tableBody"
+  hx-swap="innerHTML settle:0s"
+  hx-indicator="#tableContainer"
+  {{if eq .Page 1}}disabled{{end}}>首页</button>
+<button class="page-btn"
+  hx-get="/partials/list?{{.Query}}&page={{.PrevPage}}"
+  hx-target="#tableBody"
+  hx-swap="innerHTML settle:0s"
+  hx-indicator="#tableContainer"
+  {{if not .HasPrev}}disabled{{end}}>上一页</button>
+{{range .PageNums}}
+<button class="page-btn {{if eq . $.Page}}active{{end}}"
+  hx-get="/partials/list?{{$.Query}}&page={{.}}"
+  hx-target="#tableBody"
+  hx-swap="innerHTML settle:0s"
+  hx-indicator="#tableContainer">{{.}}</button>
+{{end}}
+<button class="page-btn"
+  hx-get="/partials/list?{{.Query}}&page={{.NextPage}}"
+  hx-target="#tableBody"
+  hx-swap="innerHTML settle:0s"
+  hx-indicator="#tableContainer"
+  {{if not .HasNext}}disabled{{end}}>下一页</button>
+<button class="page-btn"
+  hx-get="/partials/list?{{.Query}}&page={{.TotalPages}}"
+  hx-target="#tableBody"
+  hx-swap="innerHTML settle:0s"
+  hx-indicator="#tableContainer"
+  {{if eq .Page .TotalPages}}disabled{{end}}>末页</button>
+<span class="pagination-info" style="margin-left: 10px;">共 {{.Total}} 条记录</span>
+{{end}}
+{{end}}
+
+{{define "list_partials"}}
+{{template "list_rows" .}}
+<hx-partial hx-target="#statsGrid" hx-swap="innerHTML settle:0s">
+{{template "stats" .}}
+</hx-partial>
+<hx-partial hx-target="#pagination" hx-swap="innerHTML settle:0s">
+{{template "pagination" .}}
+</hx-partial>
+{{end}}

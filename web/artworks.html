@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>作品 · Pixiv Shelf</title>
+    <meta name="description" content="Pixiv Shelf 作品浏览：查看本地下载作品的缩略图与大图预览。" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('pixiv-shelf-theme');
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          }
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#0f7460" />
+    <link rel="stylesheet" href="/static/app.css?v=15" />
+    <link rel="stylesheet" href="/static/vendor/fancybox.css?v=15" />
+    <script src="/static/vendor/htmx.min.js" defer></script>
+    <script src="/static/vendor/fancybox.umd.js?v=15" defer></script>
+    <script type="module" src="/static/js/artworks.js?v=15"></script>
+  </head>
+  <body class="page-artworks">
+    <div
+      class="page-scrollbar"
+      data-page-scrollbar
+      hidden
+      aria-hidden="true"
+    >
+      <div class="page-scrollbar__bar" data-scrollbar-bar>
+        <div class="page-scrollbar__thumb" data-scrollbar-thumb></div>
+      </div>
+    </div>
+    <div class="shell">
+      <nav class="topnav">
+        <a class="brand" href="/"><img class="brand-mark" src="/static/logo.svg" width="28" height="28" alt="" />Pixiv Shelf</a>
+        <div class="topnav-right">
+          <div class="nav-links">
+            <a href="/" class="is-active">图库</a>
+            <a href="/download">下载</a>
+          </div>
+          <button type="button" class="theme-toggle" id="themeToggle" aria-label="切换主题">
+            <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"></path>
+            </svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+            </svg>
+          </button>
+        </div>
+      </nav>
+
+      <main id="main">
+      <header class="page-hero">
+        <div class="page-hero-row">
+          <div>
+            <h1>作品浏览</h1>
+            <p>点击缩略图查看大图；手机可滑动翻页与双指缩放。</p>
+          </div>
+          <a class="btn btn-ghost" href="/">返回图库</a>
+        </div>
+      </header>
+
+      <section class="panel panel-pad">
+        <div class="gallery-meta">
+          <span>作品 ID</span>
+          <span class="pill" id="artworkId"><!--SSR_ID_START-->-<!--SSR_ID_END--></span>
+          <span id="status"><!--SSR_STATUS_START--><!--SSR_STATUS_END--></span>
+        </div>
+        <div id="gallery" class="gallery" data-ssr="0">
+<!--SSR_GALLERY_START-->
+<!--SSR_GALLERY_END-->
+        </div>
+        <p class="hint">图片懒加载；侧键返回不会被灯箱劫持。</p>
+      </section>
+      </main>
+    </div>
+  </body>
+</html>

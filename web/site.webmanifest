@@ -1,0 +1,21 @@
+{
+  "name": "Pixiv Shelf",
+  "short_name": "Pixiv Shelf",
+  "description": "本地下载库：浏览、筛选与管理已下载的 Pixiv 作品。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c1117",
+  "theme_color": "#0f7460",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

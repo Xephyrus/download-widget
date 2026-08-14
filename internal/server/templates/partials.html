@@ -1,0 +1,123 @@
+{{define "status_item"}}
+<div class="status-item {{.Class}}"{{if .State}} data-download-state="{{.State}}"{{end}}>
+  <span class="status-item-icon" aria-hidden="true">{{.Icon}}</span>
+  <div class="status-item-body">
+    <p class="status-item-msg">
+      {{.Message}}{{if .LinkHref}}
+      <a class="status-item-link" href="{{.LinkHref}}">{{.LinkText}}</a>{{end}}
+    </p>
+    <time class="status-item-time">{{.Time}}</time>
+  </div>
+</div>
+{{end}}
+
+{{define "progress_block"}}
+<div class="progress-stats">
+  <div class="stat">
+    <div class="stat-number">{{.Success}}</div>
+    <div class="stat-label">成功</div>
+  </div>
+  <div class="stat">
+    <div class="stat-number">{{.Fail}}</div>
+    <div class="stat-label">失败</div>
+  </div>
+  <div class="stat">
+    <div class="stat-number">{{.Processed}}/{{.Total}}</div>
+    <div class="stat-label">已完成</div>
+  </div>
+  <div class="stat">
+    <div class="stat-number">{{printf "%.1f" .Percent}}%</div>
+    <div class="stat-label">进度</div>
+  </div>
+</div>
+<div class="progress-bar" role="progressbar" aria-label="下载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{printf "%.0f" .Percent}}">
+  <svg class="progress-svg" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true">
+    <rect class="progress-fill" x="0" y="0" height="8" width="{{printf "%.1f" .Percent}}"></rect>
+  </svg>
+</div>
+{{end}}
+
+{{define "download_submitted"}}
+<div class="status-item status-start" data-download-task="{{.TaskID}}" data-download-state="running">
+  <span class="status-item-icon" aria-hidden="true">▶</span>
+  <div class="status-item-body">
+    <p class="status-item-msg">{{if .Redownload}}已清空原目录并重新提交{{else}}任务已提交{{end}}（ID: {{.TaskID}}），开始处理…</p>
+  </div>
+</div>
+{{end}}
+
+{{define "download_cancel_ack"}}
+<div class="status-item status-start" data-download-state="cancelling">
+  <span class="status-item-icon" aria-hidden="true">■</span>
+  <div class="status-item-body">
+    <p class="status-item-msg">已发送中断信号{{if .TaskIDs}}（任务 {{index .TaskIDs 0}}）{{end}}，等待当前请求结束…</p>
+  </div>
+</div>
+{{end}}
+
+{{define "download_error"}}
+<div class="status-item status-error">
+  <span class="status-item-icon" aria-hidden="true">!</span>
+  <div class="status-item-body">
+    <p class="status-item-msg">{{.Message}}</p>
+  </div>
+</div>
+{{end}}
+
+{{define "gallery_cards"}}
+{{if .Error}}
+<span class="gallery-empty">{{.Error}}</span>
+{{else if .Images}}
+{{range $i, $img := .Images}}
+<a href="{{$img.Href}}" class="card" data-fancybox="gallery" data-caption="Artwork {{$.ID}} - {{add $i 1}}">
+  <img
+    src="{{$img.Thumb}}"
+    {{if lt $i 8}}loading="eager"{{else}}loading="lazy"{{end}}
+    {{if lt $i 4}}fetchpriority="high"{{end}}
+    decoding="async"
+    width="300"
+    height="400"
+    alt="Artwork {{$.ID}} - {{add $i 1}}"
+    onerror="this.onerror=null;this.src=this.parentElement.href"
+  />
+</a>
+{{end}}
+{{else}}
+<span class="gallery-empty">暂无图片</span>
+{{end}}
+{{end}}
+
+{{define "gallery_status"}}
+{{if .Error}}{{.Error}}{{else if .Images}}共 {{len .Images}} 张图片。{{else}}当前目录中没有图片。{{end}}
+{{end}}
+
+{{define "gallery"}}
+{{if .Error}}
+<div id="status">{{.Error}}</div>
+{{else if .Images}}
+<div id="status">共 {{len .Images}} 张图片。</div>
+{{range $i, $img := .Images}}
+<a href="{{$img.Href}}" class="card" data-fancybox="gallery" data-caption="Artwork {{$.ID}} - {{add $i 1}}">
+  <img
+    src="{{$img.Thumb}}"
+    {{if lt $i 8}}loading="eager"{{else}}loading="lazy"{{end}}
+    {{if lt $i 4}}fetchpriority="high"{{end}}
+    decoding="async"
+    width="300"
+    height="400"
+    alt="Artwork {{$.ID}} - {{add $i 1}}"
+    onerror="this.onerror=null;this.src=this.parentElement.href"
+  />
+</a>
+{{end}}
+{{else}}
+<div id="status">当前目录中没有图片。</div>
+{{end}}
+{{end}}
+
+{{define "gallery_partial"}}
+{{template "gallery_cards" .}}
+<hx-partial hx-target="#status" hx-swap="innerHTML">
+{{template "gallery_status" .}}
+</hx-partial>
+{{end}}

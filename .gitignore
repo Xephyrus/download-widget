@@ -1,0 +1,42 @@
+# Build artifacts
+*.exe
+pixiv-downloader
+pixiv-downloader.exe
+*.test
+*.out
+
+# Runtime data / downloads
+downloads/
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite.bak
+*.db.old
+*.db.compact
+*.old
+
+# Logs
+*.log
+*.err
+go-server.log
+go-server.err
+
+# Tooling / OS
+.idea/
+.vscode/
+.cursor/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local scratch
+_boltstat/
+tmp/
+temp/
+
+_fix_utf8.py
+_bad_lines.txt

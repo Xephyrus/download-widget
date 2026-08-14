@@ -1,0 +1,228 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>下载 · Pixiv Shelf</title>
+    <meta name="description" content="Pixiv Shelf 批量下载：填写原图 URL 与 Cookie，实时查看下载进度与日志。" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('pixiv-shelf-theme');
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          }
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#0f7460" />
+    <link rel="stylesheet" href="/static/app.css?v=15" />
+    <script src="/static/vendor/htmx.min.js" defer></script>
+    <script src="/static/vendor/hx-ws.min.js" defer></script>
+    <script type="module" src="/static/js/downloader.js?v=15"></script>
+  </head>
+  <body>
+    <div
+      class="page-scrollbar"
+      data-page-scrollbar
+      hidden
+      aria-hidden="true"
+    >
+      <div class="page-scrollbar__bar" data-scrollbar-bar>
+        <div class="page-scrollbar__thumb" data-scrollbar-thumb></div>
+      </div>
+    </div>
+    <div
+      class="shell"
+      hx-ws:connect="/ws"
+      hx-target="#status"
+      hx-swap="beforeend"
+    >
+      <nav class="topnav">
+        <a class="brand" href="/"><img class="brand-mark" src="/static/logo.svg" width="28" height="28" alt="" />Pixiv Shelf</a>
+        <div class="topnav-right">
+          <div class="nav-links">
+            <a href="/">图库</a>
+            <a href="/download" class="is-active">下载</a>
+          </div>
+          <button type="button" class="theme-toggle" id="themeToggle" aria-label="切换主题">
+            <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"></path>
+            </svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+            </svg>
+          </button>
+        </div>
+      </nav>
+
+      <main id="main">
+      <header class="page-hero">
+        <h1>批量下载</h1>
+        <p>填写原图 URL 与 Cookie，进度会实时推送到右侧日志。</p>
+      </header>
+
+      <div class="download-layout">
+        <section class="panel panel-pad">
+          <form
+            id="downloadForm"
+            hx-post="/partials/download"
+            hx-target="#status"
+            hx-swap="beforeend"
+            hx-on::before-request="if(document.getElementById('redownload')?.checked){ if(!confirm('将清空该任务目录下所有文件并重新下载，且同步更新数据库。确定继续？')){ event.preventDefault(); } }"
+            hx-on::after-request="if(event.detail.successful){ this.querySelector('[type=submit]')?.blur(); window.onDownloadSubmitted && window.onDownloadSubmitted(event) }"
+          >
+            <div class="form-group">
+              <label class="field-label" for="url">第一张原图 URL</label>
+              <textarea
+                id="url"
+                name="url"
+                rows="5"
+                placeholder="https://i.pximg.net/img-original/img/.../..._p0.jpg"
+                hx-on:change="localStorage.setItem('url', this.value)"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="count">图片数量</label>
+              <input
+                id="count"
+                name="count"
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                placeholder="例如 12"
+                hx-on:change="localStorage.setItem('count', this.value)"
+              />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="cookie">Pixiv Cookie</label>
+              <input
+                type="text"
+                id="cookie"
+                name="cookie"
+                placeholder="包含 PHPSESSID 的 Cookie 字符串"
+                hx-on:change="localStorage.setItem('cookie', this.value)"
+              />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="taskName">任务名称 / 作品 ID</label>
+              <input
+                type="text"
+                id="taskName"
+                name="taskName"
+                placeholder="作品 ID，可自动填充 URL 与页数"
+                hx-on:change="localStorage.setItem('taskName', this.value); window.fillFromArtworkId(this.value)"
+                hx-on:keydown="if(event.key==='Enter'){ event.preventDefault(); this.dispatchEvent(new Event('change')); }"
+              />
+            </div>
+            <div class="form-group">
+              <label class="check-row" for="redownload">
+                <input type="checkbox" id="redownload" name="redownload" value="1" />
+                <span>
+                  <span class="check-title">重新下载</span>
+                  <span class="check-hint">先清空该任务目录下所有文件，并同步更新数据库后再下载</span>
+                </span>
+              </label>
+            </div>
+            <div class="button-group">
+              <button type="submit" class="btn btn-primary" id="startDownload">开始下载</button>
+              <button
+                type="button"
+                class="btn btn-danger"
+                id="cancelDownload"
+                disabled
+                hx-post="/partials/download/cancel"
+                hx-include="#activeTaskId"
+                hx-target="#status"
+                hx-swap="beforeend"
+              >
+                中断下载
+              </button>
+              <a class="btn btn-ghost" href="/">返回图库</a>
+            </div>
+            <input type="hidden" id="activeTaskId" name="taskId" value="" />
+          </form>
+        </section>
+
+        <aside class="panel panel-pad log-panel" id="logPanel">
+          <header class="row">
+            <div class="min-0">
+              <h2 class="panel-title">运行日志</h2>
+              <p class="panel-desc">进度与逐条结果实时推送</p>
+            </div>
+            <span class="dot-pill" id="logBadge" data-state="idle">待命</span>
+          </header>
+
+          <div id="progress" aria-live="polite">
+            <div class="progress-stats">
+              <div class="stat">
+                <div class="stat-number">0</div>
+                <div class="stat-label">成功</div>
+              </div>
+              <div class="stat">
+                <div class="stat-number">0</div>
+                <div class="stat-label">失败</div>
+              </div>
+              <div class="stat">
+                <div class="stat-number">0/0</div>
+                <div class="stat-label">已完成</div>
+              </div>
+              <div class="stat">
+                <div class="stat-number">0%</div>
+                <div class="stat-label">进度</div>
+              </div>
+            </div>
+            <div class="progress-bar" role="progressbar" aria-label="下载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <svg class="progress-svg" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true">
+                <rect class="progress-fill" x="0" y="0" height="8" width="0"></rect>
+              </svg>
+            </div>
+          </div>
+
+          <div class="status-log-wrap">
+            <div class="status-log inset" id="status" data-scrollbar-scroller aria-live="polite">
+              <div class="status-placeholder">
+                <p class="status-idle-kicker">尚未开始</p>
+                <ol class="status-idle-steps">
+                  <li>
+                    <span class="status-idle-num">1</span>
+                    <span>确认左侧 URL、数量与 Cookie</span>
+                  </li>
+                  <li>
+                    <span class="status-idle-num">2</span>
+                    <span>点击「开始下载」提交任务</span>
+                  </li>
+                  <li>
+                    <span class="status-idle-num">3</span>
+                    <span>在此查看成功、失败与中断记录</span>
+                  </li>
+                </ol>
+              </div>
+            </div>
+            <div
+              class="page-scrollbar page-scrollbar--local"
+              data-custom-scrollbar
+              hidden
+              aria-hidden="true"
+            >
+              <div class="page-scrollbar__bar" data-scrollbar-bar>
+                <div class="page-scrollbar__thumb" data-scrollbar-thumb></div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+      </main>
+    </div>
+  </body>
+</html>

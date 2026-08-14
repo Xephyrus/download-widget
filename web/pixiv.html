@@ -1,0 +1,214 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>图库 · Pixiv Shelf</title>
+    <meta name="description" content="Pixiv Shelf 本地下载库：浏览、筛选与管理已下载的 Pixiv 作品文件夹。" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('pixiv-shelf-theme');
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          }
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#0f7460" />
+    <link rel="stylesheet" href="/static/app.css?v=15" />
+    <script src="/static/vendor/htmx.min.js" defer></script>
+    <script type="module" src="/static/js/list.js?v=15"></script>
+  </head>
+  <body>
+    <div
+      class="page-scrollbar"
+      data-page-scrollbar
+      hidden
+      aria-hidden="true"
+    >
+      <div class="page-scrollbar__bar" data-scrollbar-bar>
+        <div class="page-scrollbar__thumb" data-scrollbar-thumb></div>
+      </div>
+    </div>
+    <div class="shell">
+      <nav class="topnav">
+        <a class="brand" href="/"><img class="brand-mark" src="/static/logo.svg" width="28" height="28" alt="" />Pixiv Shelf</a>
+        <div class="topnav-right">
+          <div class="nav-links">
+            <a href="/" class="is-active" data-nav="gallery">图库</a>
+            <a href="/download" data-nav="download">下载</a>
+          </div>
+          <button type="button" class="theme-toggle" id="themeToggle" aria-label="切换主题">
+            <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"></path>
+            </svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+            </svg>
+          </button>
+        </div>
+      </nav>
+
+      <main id="main">
+      <header class="page-hero">
+        <div class="page-hero-row">
+          <div>
+            <h1>本地下载库</h1>
+            <p>浏览、筛选与管理已下载的作品文件夹。</p>
+          </div>
+          <a class="btn btn-primary" href="/download">新建下载</a>
+        </div>
+      </header>
+
+      <div class="stats-grid" id="statsGrid">
+<!--SSR_STATS_START-->
+        <div class="stat-card"><div class="label">总文件夹数</div><div class="value">-</div></div>
+        <div class="stat-card"><div class="label">总文件数</div><div class="value">-</div></div>
+        <div class="stat-card"><div class="label">总大小</div><div class="value">-</div></div>
+        <div class="stat-card"><div class="label">当前页数</div><div class="value">-</div></div>
+<!--SSR_STATS_END-->
+      </div>
+
+      <form
+        id="listFilters"
+        class="panel toolbar"
+        hx-get="/partials/list"
+        hx-trigger="change delay:100ms from:select, change delay:100ms from:input[type='number'], submit"
+        hx-target="#tableBody"
+        hx-swap="innerHTML settle:0s"
+        hx-indicator="#tableContainer"
+      >
+        <div class="search-bar">
+          <div class="search-input-wrapper">
+            <input
+              type="text"
+              name="search"
+              id="searchInput"
+              placeholder="搜索文件夹名称…"
+              hx-get="/partials/list"
+              hx-trigger="input delay:300ms, keyup[key=='Enter']"
+              hx-include="#listFilters"
+              hx-target="#tableBody"
+              hx-swap="innerHTML settle:0s"
+              hx-indicator="#tableContainer"
+            />
+          </div>
+          <button type="submit" class="btn btn-primary">搜索</button>
+        </div>
+
+        <div class="filters">
+          <div class="filter-group">
+            <label for="pageSizeSelect">每页</label>
+            <select name="pageSize" id="pageSizeSelect">
+              <option value="10">10</option>
+              <option value="20" selected>20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="sortBySelect">排序</label>
+            <select name="sortBy" id="sortBySelect">
+              <option value="name">名称</option>
+              <option value="createdAt" selected>创建时间</option>
+              <option value="modifiedAt">修改时间</option>
+              <option value="fileCount">文件数</option>
+              <option value="size">大小</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="sortOrderSelect">方向</label>
+            <select name="sortOrder" id="sortOrderSelect">
+              <option value="desc" selected>降序</option>
+              <option value="asc">升序</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="minFileCount">最少文件</label>
+            <input type="number" name="minFileCount" id="minFileCount" placeholder="不限" min="0" />
+          </div>
+          <div class="filter-group">
+            <label for="maxFileCount">最多文件</label>
+            <input type="number" name="maxFileCount" id="maxFileCount" placeholder="不限" min="0" />
+          </div>
+          <button
+            type="button"
+            class="btn btn-reset"
+            id="resetFilters"
+            hx-get="/partials/list?pageSize=20&sortBy=createdAt&sortOrder=desc"
+            hx-target="#tableBody"
+            hx-swap="innerHTML settle:0s"
+            hx-indicator="#tableContainer"
+            hx-on:click="document.getElementById('listFilters').reset()"
+          >
+            重置
+          </button>
+        </div>
+        <input type="hidden" name="page" value="1" />
+      </form>
+
+      <div class="panel table-container" id="tableContainer">
+        <div class="table-progress" aria-hidden="true"></div>
+        <div class="table-scroll-wrap">
+          <div class="table-scroll" data-scrollbar-scroller>
+            <table id="dataTable">
+              <thead>
+                <tr>
+                  <th>文件夹</th>
+                  <th>文件数</th>
+                  <th>大小</th>
+                  <th>创建时间</th>
+                  <th>修改时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody
+                id="tableBody"
+                hx-swap="innerHTML settle:0s"
+                hx-indicator="#tableContainer"
+              >
+<!--SSR_ROWS_START-->
+              <tr class="is-empty">
+                <td colspan="6">
+                  <div class="table-empty">
+                    <div class="table-empty-mark" aria-hidden="true"></div>
+                    <p class="table-empty-title">加载中…</p>
+                    <p class="table-empty-hint">正在读取本地图库列表。</p>
+                  </div>
+                </td>
+              </tr>
+<!--SSR_ROWS_END-->
+              </tbody>
+            </table>
+          </div>
+          <div
+            class="page-scrollbar page-scrollbar--local"
+            data-custom-scrollbar
+            hidden
+            aria-hidden="true"
+          >
+            <div class="page-scrollbar__bar" data-scrollbar-bar>
+              <div class="page-scrollbar__thumb" data-scrollbar-thumb></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel pagination" id="pagination">
+<!--SSR_PAGINATION_START-->
+<!--SSR_PAGINATION_END-->
+      </div>
+      </main>
+    </div>
+  </body>
+</html>
