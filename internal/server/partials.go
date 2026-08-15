@@ -98,15 +98,10 @@ func (s *Server) handlePartialsDownload(w http.ResponseWriter, r *http.Request) 
 	redownload := formTruthy(r.FormValue("redownload"))
 	if redownload {
 		s.cancelDownloadTasksForFolder(taskName)
-		if err := s.clearFolderContents(taskName); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			s.rend.render(w, "download_error", map[string]any{"Message": err.Error()})
-			return
-		}
 	}
 
 	taskID := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	s.startDownloadTask(taskID, urls, cookie, taskName)
+	s.startDownloadTask(taskID, urls, cookie, taskName, redownload)
 	s.rend.render(w, "download_submitted", map[string]any{
 		"TaskID":     taskID,
 		"Redownload": redownload,

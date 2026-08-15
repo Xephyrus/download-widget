@@ -14,7 +14,7 @@ if (artworkId) {
 }
 
 const fancyboxOpts = {
-  Hash: false,
+  Hash: true,
   Carousel: {
     preload: 2,
     Toolbar: {
@@ -53,41 +53,19 @@ const fancyboxOpts = {
   },
 };
 
-function galleryLinks() {
-  return [...galleryEl.querySelectorAll('a[data-fancybox="gallery"]')];
-}
-
-function openFancyboxAt(link) {
-  if (!window.Fancybox || !link) return;
-  const links = galleryLinks();
-  const startIndex = Math.max(0, links.indexOf(link));
-  const slides = links.map((el) => ({
-    src: el.getAttribute('href'),
-    caption: el.getAttribute('data-caption') || '',
-  }));
-  window.Fancybox.show(slides, Object.assign({}, fancyboxOpts, { startIndex }));
-}
-
-function ensureFancybox(attempt = 0) {
+function bindFancybox(attempt = 0) {
   if (!window.Fancybox) {
     if (attempt < 50) {
-      setTimeout(() => ensureFancybox(attempt + 1), 40);
+      setTimeout(() => bindFancybox(attempt + 1), 40);
     }
     return;
   }
   window.Fancybox.unbind('[data-fancybox="gallery"]');
+  window.Fancybox.bind('[data-fancybox="gallery"]', fancyboxOpts);
 }
 
-galleryEl.addEventListener('click', (e) => {
-  const link = e.target.closest?.('a[data-fancybox="gallery"]');
-  if (!link || !galleryEl.contains(link)) return;
-  e.preventDefault();
-  e.stopPropagation();
-  openFancyboxAt(link);
-});
-
 function onGalleryReady() {
-  ensureFancybox();
+  bindFancybox();
   window.dispatchEvent(new Event('resize'));
 }
 
@@ -164,11 +142,5 @@ window.addEventListener('pageshow', (e) => {
   if (e.persisted) {
     if (window.Fancybox) window.Fancybox.close(true);
     onGalleryReady();
-  }
-});
-
-window.addEventListener('popstate', () => {
-  if (window.Fancybox?.getInstance()) {
-    window.Fancybox.close(true);
   }
 });

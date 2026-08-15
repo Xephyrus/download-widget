@@ -531,6 +531,45 @@ button,
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
 
+.dot-pill[data-state='done'] {
+  color: var(--ok-text);
+  background: var(--ok-bg);
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+}
+
+.dot-pill[data-state='done']::before {
+  background: var(--ok);
+  opacity: 1;
+}
+
+.download-done-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--border));
+  background: color-mix(in srgb, var(--ok) 12%, var(--surface));
+}
+
+.download-done-banner[hidden] {
+  display: none !important;
+}
+
+.download-done-banner__text {
+  margin: 0;
+  flex: 1 1 12rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.download-done-banner__btn {
+  flex: 0 0 auto;
+}
+
 /* Stats */
 .stats-grid {
   display: grid;

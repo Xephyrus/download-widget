@@ -24,10 +24,12 @@
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#0f7460" />
-    <link rel="stylesheet" href="/static/app.css?v=15" />
+    <!-- Official hx-ws config: keep socket alive in background tabs -->
+    <meta name="htmx-config" content="ws.pauseOnBackground:false" />
+    <link rel="stylesheet" href="/static/app.css?v=19" />
     <script src="/static/vendor/htmx.min.js" defer></script>
-    <script src="/static/vendor/hx-ws.min.js" defer></script>
-    <script type="module" src="/static/js/downloader.js?v=15"></script>
+    <script src="/static/vendor/hx-ws.min.js?v=19" defer></script>
+    <script type="module" src="/static/js/downloader.js?v=19"></script>
   </head>
   <body>
     <div
@@ -45,6 +47,7 @@
       hx-ws:connect="/ws"
       hx-target="#status"
       hx-swap="beforeend"
+      hx-config="ws.pauseOnBackground:false"
     >
       <nav class="topnav">
         <a class="brand" href="/"><img class="brand-mark" src="/static/logo.svg" width="28" height="28" alt="" />Pixiv Shelf</a>
@@ -78,7 +81,7 @@
             hx-post="/partials/download"
             hx-target="#status"
             hx-swap="beforeend"
-            hx-on::before-request="if(document.getElementById('redownload')?.checked){ if(!confirm('将清空该任务目录下所有文件并重新下载，且同步更新数据库。确定继续？')){ event.preventDefault(); } }"
+            hx-on::before-request="if(document.getElementById('redownload')?.checked){ if(!confirm('将清空该任务目录下所有文件并重新下载，且同步更新数据库。确定继续？')){ event.preventDefault(); return; } } if(window.resetProgressUI) window.resetProgressUI();"
             hx-on::after-request="if(event.detail.successful){ this.querySelector('[type=submit]')?.blur(); window.onDownloadSubmitted && window.onDownloadSubmitted(event) }"
           >
             <div class="form-group">

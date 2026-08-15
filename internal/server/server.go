@@ -315,10 +315,6 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Redownload {
 		s.cancelDownloadTasksForFolder(taskName)
-		if err := s.clearFolderContents(taskName); err != nil {
-			writeJSONErr(w, http.StatusBadRequest, err.Error())
-			return
-		}
 	}
 
 	taskID := strconv.FormatInt(time.Now().UnixMilli(), 10)
@@ -328,7 +324,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		"message":    "任务已开始，将通过WebSocket推送进度",
 	})
 
-	s.startDownloadTask(taskID, req.URLs, req.Cookie, taskName)
+	s.startDownloadTask(taskID, req.URLs, req.Cookie, taskName, req.Redownload)
 }
 
 func (s *Server) handleAPIDownloadCancel(w http.ResponseWriter, r *http.Request) {

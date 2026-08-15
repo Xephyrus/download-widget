@@ -35,6 +35,7 @@ func (s *Server) broadcastHTMX(ev downloader.ProgressEvent) {
 		"LinkText": linkText,
 		"Time":     time.Now().Format("15:04:05"),
 		"State":    dlState,
+		"TaskID":   ev.TaskID,
 	})
 	if err == nil {
 		s.broadcastText(itemHTML)
@@ -68,12 +69,23 @@ func (s *Server) broadcastHTMX(ev downloader.ProgressEvent) {
 	if err != nil {
 		return
 	}
-	payload, _ := json.Marshal(map[string]any{
+	payload := map[string]any{
 		"content": progressHTML,
 		"target":  "#progress",
 		"swap":    "innerHTML",
-	})
-	s.broadcastText(string(payload))
+	}
+	// Lifecycle hint so the download page can update badge/banner
+	// even if a status HTML frame was dropped.
+	if dlState != "" {
+		payload["downloadState"] = dlState
+		payload["taskId"] = ev.TaskID
+		if ev.Type == "complete" {
+			payload["success"] = ev.SuccessCount
+			payload["fail"] = ev.FailCount
+		}
+	}
+	raw, _ := json.Marshal(payload)
+	s.broadcastText(string(raw))
 }
 
 func (s *Server) progressFor(ev downloader.ProgressEvent) wsProgressState {
@@ -94,6 +106,8 @@ func (s *Server) progressFor(ev downloader.ProgressEvent) wsProgressState {
 		st.fail++
 	case "skipped":
 		st.skipped++
+	case "clearing":
+		// prepare UI only; counts unchanged
 	case "complete":
 		st.success = ev.SuccessCount
 		st.fail = ev.FailCount
@@ -121,9 +135,12 @@ func (s *Server) broadcastText(text string) {
 	s.clientsMu.Lock()
 	defer s.clientsMu.Unlock()
 	for conn := range s.clients {
+		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if err := conn.WriteMessage(websocket.TextMessage, []byte(text)); err != nil {
 			_ = conn.Close()
 			delete(s.clients, conn)
+			continue
 		}
+		_ = conn.SetWriteDeadline(time.Time{})
 	}
 }

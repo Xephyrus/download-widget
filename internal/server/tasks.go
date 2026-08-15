@@ -1,13 +1,17 @@
 package server
 
-import "context"
+import (
+	"context"
+
+	"github.com/Xephyrus/download-widget/internal/downloader"
+)
 
 type runningTask struct {
 	cancel   context.CancelFunc
 	folderID string
 }
 
-func (s *Server) startDownloadTask(taskID string, urls []string, cookie, taskName string) {
+func (s *Server) startDownloadTask(taskID string, urls []string, cookie, taskName string, redownload bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	folderID := taskName
 	if folderID == "" {
@@ -28,6 +32,21 @@ func (s *Server) startDownloadTask(taskID string, urls []string, cookie, taskNam
 			s.tasksMu.Unlock()
 			cancel()
 		}()
+		if redownload {
+			s.broadcastHTMX(downloader.ProgressEvent{
+				Type:   "clearing",
+				TaskID: taskID,
+				Total:  len(urls),
+			})
+			if err := s.clearFolderContents(folderID); err != nil {
+				s.broadcastHTMX(downloader.ProgressEvent{
+					Type:   "task_error",
+					TaskID: taskID,
+					Error:  err.Error(),
+				})
+				return
+			}
+		}
 		s.dl.BatchDownload(ctx, taskID, urls, cookie, taskName, s.broadcastHTMX)
 	}()
 }

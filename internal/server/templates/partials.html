@@ -1,5 +1,5 @@
 {{define "status_item"}}
-<div class="status-item {{.Class}}"{{if .State}} data-download-state="{{.State}}"{{end}}>
+<div class="status-item {{.Class}}"{{if .TaskID}} data-download-task="{{.TaskID}}"{{end}}{{if .State}} data-download-state="{{.State}}"{{end}}>
   <span class="status-item-icon" aria-hidden="true">{{.Icon}}</span>
   <div class="status-item-body">
     <p class="status-item-msg">

@@ -41,11 +41,11 @@ func main() {
 			log.Printf("同步磁盘到数据库失败: %v", syncErr)
 		} else {
 			log.Printf("已同步磁盘目录到数据库: %d 个文件夹, %d 个文件", folders, files)
-		}
-		if compactErr := store.Compact(); compactErr != nil {
-			log.Printf("压缩数据库失败: %v", compactErr)
-		} else if fi, statErr := os.Stat(cfg.DBPath); statErr == nil {
-			log.Printf("数据库已压缩: %.2f MB", float64(fi.Size())/(1<<20))
+			if compactErr := store.Compact(); compactErr != nil {
+				log.Printf("压缩数据库失败: %v", compactErr)
+			} else if fi, statErr := os.Stat(cfg.DBPath); statErr == nil {
+				log.Printf("数据库已压缩: %.2f MB", float64(fi.Size())/(1<<20))
+			}
 		}
 	}
 

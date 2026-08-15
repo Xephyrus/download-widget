@@ -204,6 +204,8 @@ func generatePixivURLs(sample string, count int) ([]string, error) {
 
 func statusFromEvent(ev downloader.ProgressEvent) (class, icon, message, linkHref, linkText string) {
 	switch ev.Type {
+	case "clearing":
+		return "status-start", "▣", fmt.Sprintf("正在清空目录并准备重新下载…（任务 %s）", ev.TaskID), "", ""
 	case "start":
 		return "status-start", "↓", fmt.Sprintf("开始下载：%s（%d/%d）", ev.Filename, ev.Current, ev.Total), "", ""
 	case "success":

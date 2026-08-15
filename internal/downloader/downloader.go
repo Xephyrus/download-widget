@@ -63,7 +63,7 @@ func (s *Service) BatchDownload(ctx context.Context, taskID string, urls []strin
 		folderID = taskID
 	}
 	if err := safepath.ValidateFolderID(folderID); err != nil {
-		notify(ProgressEvent{Type: "error", TaskID: taskID, Error: err.Error()})
+		notify(ProgressEvent{Type: "task_error", TaskID: taskID, Error: err.Error()})
 		return
 	}
 	taskDir := filepath.Join(s.cfg.DownloadDir, folderID)

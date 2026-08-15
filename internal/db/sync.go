@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,8 @@ import (
 )
 
 // SyncFromDisk scans downloadDir and rebuilds folder/file metadata from disk.
-// Orphan DB folders not present under downloadDir are removed.
+// Orphan DB folders not present under downloadDir are removed — but only when the
+// scan actually finds folders. An empty/wrong DOWNLOAD_DIR must not wipe the index.
 func (s *Store) SyncFromDisk(downloadDir string) (folders int, files int, err error) {
 	if s.root == "" {
 		s.root = filepath.Clean(downloadDir)
@@ -17,13 +19,58 @@ func (s *Store) SyncFromDisk(downloadDir string) (folders int, files int, err er
 	entries, err := os.ReadDir(downloadDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, 0, nil
+			return 0, 0, fmt.Errorf("下载目录不存在: %s", downloadDir)
 		}
 		return 0, 0, err
 	}
 
+	type folderScan struct {
+		id   string
+		path string
+		info os.FileInfo
+	}
+	scanned := make([]folderScan, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		folderID := strings.TrimSpace(entry.Name())
+		if folderID == "" || strings.HasPrefix(folderID, ".") {
+			continue
+		}
+		folderPath := filepath.Join(downloadDir, entry.Name())
+		info, statErr := os.Stat(folderPath)
+		if statErr != nil || !info.IsDir() {
+			continue
+		}
+		scanned = append(scanned, folderScan{id: folderID, path: folderPath, info: info})
+	}
+
+	existing := 0
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketFolders)
+		if b == nil {
+			return nil
+		}
+		return b.ForEach(func(_, _ []byte) error {
+			existing++
+			return nil
+		})
+	})
+
+	// Wrong DOWNLOAD_DIR (empty project ./downloads) used to prune every record.
+	if len(scanned) == 0 {
+		if existing > 0 {
+			return 0, 0, fmt.Errorf(
+				"跳过同步：目录 %s 下没有作品文件夹，但数据库已有 %d 条记录（请检查 DOWNLOAD_DIR）",
+				downloadDir, existing,
+			)
+		}
+		return 0, 0, nil
+	}
+
 	err = s.db.Update(func(tx *bolt.Tx) error {
-		seen := make(map[string]struct{})
+		seen := make(map[string]struct{}, len(scanned))
 		fb := tx.Bucket(bucketFolders)
 
 		_ = tx.DeleteBucket(bucketFiles)
@@ -32,21 +79,10 @@ func (s *Store) SyncFromDisk(downloadDir string) (folders int, files int, err er
 			return err
 		}
 
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			folderID := strings.TrimSpace(entry.Name())
-			if folderID == "" || strings.HasPrefix(folderID, ".") {
-				continue
-			}
-			folderPath := filepath.Join(downloadDir, entry.Name())
-			info, statErr := os.Stat(folderPath)
-			if statErr != nil {
-				continue
-			}
-
-			created, modified := diskTimes(info)
+		for _, item := range scanned {
+			folderID := item.id
+			folderPath := item.path
+			created, modified := diskTimes(item.info)
 			rec := folderRec{
 				Path:       s.compactFolderPath(folderID, folderPath),
 				CreatedAt:  created.Unix(),
