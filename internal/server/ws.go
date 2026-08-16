@@ -133,14 +133,28 @@ func (s *Server) broadcastText(text string) {
 	defer s.broadcastWriteMu.Unlock()
 
 	s.clientsMu.Lock()
-	defer s.clientsMu.Unlock()
+	conns := make([]*websocket.Conn, 0, len(s.clients))
 	for conn := range s.clients {
+		conns = append(conns, conn)
+	}
+	s.clientsMu.Unlock()
+
+	var dead []*websocket.Conn
+	for _, conn := range conns {
 		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if err := conn.WriteMessage(websocket.TextMessage, []byte(text)); err != nil {
-			_ = conn.Close()
-			delete(s.clients, conn)
+			dead = append(dead, conn)
 			continue
 		}
 		_ = conn.SetWriteDeadline(time.Time{})
 	}
+	if len(dead) == 0 {
+		return
+	}
+	s.clientsMu.Lock()
+	for _, conn := range dead {
+		delete(s.clients, conn)
+		_ = conn.Close()
+	}
+	s.clientsMu.Unlock()
 }

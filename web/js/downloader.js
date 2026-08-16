@@ -261,10 +261,68 @@ function appendStatusHint(message) {
 }
 
 function isHxWsOpen() {
-  const shell = document.querySelector('[hx-ws\\:connect], [hx-ws-connect]');
-  const conn = shell?._htmx?.ws;
-  const socket = conn?.socket || conn?.connection?.socket;
-  return !!(socket && socket.readyState === WebSocket.OPEN);
+  if (liveWS && liveWS.readyState === WebSocket.OPEN) return true;
+  return false;
+}
+
+function connectShell() {
+  return document.querySelector('[hx-ws\\:connect], [hx-ws-connect]');
+}
+
+/** Track the live hx-ws connection object from official events. */
+let liveWS = null;
+let liveConnection = null;
+let lastWsEventAt = 0;
+let reconnectForceTimer = 0;
+
+function markWsAlive() {
+  lastWsEventAt = Date.now();
+}
+
+function socketFromConnection(connection) {
+  return connection?.socket || null;
+}
+
+/**
+ * Force hx-ws to reconnect without modifying the extension:
+ * close the live socket (triggers official reconnect), or re-process the connect element.
+ */
+function forceHxWsReconnect(reason) {
+  const shell = connectShell();
+  if (!shell) return;
+
+  const sock = liveWS || socketFromConnection(liveConnection);
+  if (sock && (sock.readyState === WebSocket.OPEN || sock.readyState === WebSocket.CONNECTING)) {
+    try {
+      sock.close(4000, reason || 'watchdog');
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+
+  // Connection object gone — re-init via official htmx.process + load trigger.
+  if (shell._htmx?.ws) {
+    shell._htmx.ws.url = null;
+    shell._htmx.ws.initialized = false;
+  }
+  if (typeof window.htmx?.process === 'function') {
+    window.htmx.process(shell);
+  }
+  // Explicitly fire load-style connect if process alone does not.
+  try {
+    shell.dispatchEvent(new Event('load', { bubbles: false }));
+  } catch {
+    /* ignore */
+  }
+}
+
+function ensureWsHealthy(reason) {
+  if (isHxWsOpen()) {
+    markWsAlive();
+    return;
+  }
+  forceHxWsReconnect(reason || 'ensure');
 }
 
 function waitForWs(timeoutMs = 8000) {
@@ -273,6 +331,7 @@ function waitForWs(timeoutMs = 8000) {
       resolve(true);
       return;
     }
+    ensureWsHealthy('wait');
     const onOpen = () => {
       cleanup();
       resolve(true);
@@ -289,13 +348,53 @@ function waitForWs(timeoutMs = 8000) {
   });
 }
 
+document.addEventListener('htmx:after:ws:connection', (event) => {
+  liveConnection = event.detail?.connection || null;
+  liveWS = socketFromConnection(liveConnection);
+  markWsAlive();
+});
+
+document.addEventListener('htmx:ws:close', () => {
+  // hx-ws schedules reconnect itself; keep references until open again.
+  if (liveWS && liveWS.readyState === WebSocket.CLOSED) {
+    liveWS = null;
+  }
+});
+
 document.addEventListener('htmx:after:ws:message', (event) => {
+  markWsAlive();
   const json = event.detail?.message?.json;
   if (json && typeof json === 'object') {
     applyLifecycleHint(json);
   }
   scrollStatusToBottom(false);
 });
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  // Tab visible again: recover from half-open / missed reconnect.
+  window.setTimeout(() => ensureWsHealthy('visible'), 50);
+});
+
+window.addEventListener('online', () => {
+  ensureWsHealthy('online');
+});
+
+window.addEventListener('pageshow', () => {
+  ensureWsHealthy('pageshow');
+});
+
+// Periodic check while a download is marked running (catches silent half-open sockets).
+window.setInterval(() => {
+  const running = !!document.getElementById('cancelDownload') && !document.getElementById('cancelDownload').disabled;
+  if (!running) return;
+  if (isHxWsOpen()) return;
+  if (reconnectForceTimer) return;
+  reconnectForceTimer = window.setTimeout(() => {
+    reconnectForceTimer = 0;
+  }, 2000);
+  forceHxWsReconnect('download-running');
+}, 5000);
 
 async function restoreForm() {
   for (const key of ['url', 'count', 'taskName', 'cookie']) {

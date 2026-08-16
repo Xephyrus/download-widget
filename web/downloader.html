@@ -24,12 +24,27 @@
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#0f7460" />
-    <!-- Official hx-ws config: keep socket alive in background tabs -->
-    <meta name="htmx-config" content="ws.pauseOnBackground:false" />
-    <link rel="stylesheet" href="/static/app.css?v=19" />
+    <!-- Official hx-ws config (four.htmx.org): keep socket alive + auto-reconnect -->
+    <meta
+      name="htmx-config"
+      content="ws.pauseOnBackground:false ws.reconnect:true ws.reconnectDelay:500ms ws.reconnectMaxDelay:15s"
+    />
+    <link rel="stylesheet" href="/static/app.css?v=20" />
     <script src="/static/vendor/htmx.min.js" defer></script>
-    <script src="/static/vendor/hx-ws.min.js?v=19" defer></script>
-    <script type="module" src="/static/js/downloader.js?v=19"></script>
+    <script defer>
+      // Reinforce official config after htmx loads, before hx-ws initializes.
+      (function () {
+        if (!window.htmx) return;
+        window.htmx.config.ws = Object.assign({}, window.htmx.config.ws || {}, {
+          pauseOnBackground: false,
+          reconnect: true,
+          reconnectDelay: '500ms',
+          reconnectMaxDelay: '15s',
+        });
+      })();
+    </script>
+    <script src="/static/vendor/hx-ws.min.js?v=20" defer></script>
+    <script type="module" src="/static/js/downloader.js?v=20"></script>
   </head>
   <body>
     <div
@@ -47,7 +62,7 @@
       hx-ws:connect="/ws"
       hx-target="#status"
       hx-swap="beforeend"
-      hx-config="ws.pauseOnBackground:false"
+      hx-config="ws.pauseOnBackground:false ws.reconnect:true"
     >
       <nav class="topnav">
         <a class="brand" href="/"><img class="brand-mark" src="/static/logo.svg" width="28" height="28" alt="" />Pixiv Shelf</a>

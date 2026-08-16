@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -268,19 +269,57 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.clients[conn] = struct{}{}
 	s.clientsMu.Unlock()
 
+	go s.serveWS(conn)
+}
+
+// serveWS keeps the socket healthy with ping/pong so half-open clients
+// are dropped and hx-ws can reconnect instead of staying stuck OPEN.
+func (s *Server) serveWS(conn *websocket.Conn) {
+	const (
+		pongWait   = 60 * time.Second
+		pingPeriod = 20 * time.Second
+		writeWait  = 5 * time.Second
+	)
+
+	defer func() {
+		s.clientsMu.Lock()
+		delete(s.clients, conn)
+		s.clientsMu.Unlock()
+		_ = conn.Close()
+	}()
+
+	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(pongWait))
+	})
+
+	done := make(chan struct{})
 	go func() {
-		defer func() {
-			s.clientsMu.Lock()
-			delete(s.clients, conn)
-			s.clientsMu.Unlock()
-			_ = conn.Close()
-		}()
+		ticker := time.NewTicker(pingPeriod)
+		defer ticker.Stop()
 		for {
-			if _, _, err := conn.ReadMessage(); err != nil {
+			select {
+			case <-ticker.C:
+				s.broadcastWriteMu.Lock()
+				err := conn.WriteControl(websocket.PingMessage, []byte("ping"), time.Now().Add(writeWait))
+				s.broadcastWriteMu.Unlock()
+				if err != nil {
+					_ = conn.Close()
+					return
+				}
+			case <-done:
 				return
 			}
 		}
 	}()
+
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			close(done)
+			return
+		}
+		_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+	}
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
@@ -482,7 +521,23 @@ func checkWSOrigin(r *http.Request) bool {
 	if err != nil || ou.Host == "" {
 		return false
 	}
-	return strings.EqualFold(ou.Host, r.Host)
+	reqHost := strings.TrimSpace(r.Host)
+	if reqHost == "" {
+		reqHost = strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
+	}
+	if reqHost == "" {
+		return false
+	}
+	// Accept exact Host match, or hostname-only match (port may differ via proxy).
+	if strings.EqualFold(ou.Host, reqHost) {
+		return true
+	}
+	oh := ou.Hostname()
+	rh := reqHost
+	if h, _, err := net.SplitHostPort(reqHost); err == nil {
+		rh = h
+	}
+	return oh != "" && strings.EqualFold(oh, rh)
 }
 
 func jsonDecode(r *http.Request, dst any) error {
