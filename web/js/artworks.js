@@ -138,9 +138,21 @@ function boot() {
 
 boot();
 
+function closeFancyboxSafe() {
+  try {
+    if (window.Fancybox) window.Fancybox.close(true);
+  } catch {
+    /* ignore teardown races on Back / bfcache */
+  }
+}
+
+window.addEventListener('pagehide', () => {
+  closeFancyboxSafe();
+});
+
 window.addEventListener('pageshow', (e) => {
   if (e.persisted) {
-    if (window.Fancybox) window.Fancybox.close(true);
+    closeFancyboxSafe();
     onGalleryReady();
   }
 });

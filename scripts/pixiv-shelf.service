@@ -1,0 +1,15 @@
+[Unit]
+Description=Pixiv Shelf download widget
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pixiv-shelf
+# Prefer EnvironmentFile over hardcoding secrets/paths in the unit.
+EnvironmentFile=/opt/pixiv-shelf/config.env
+ExecStart=/opt/pixiv-shelf/pixiv-downloader
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

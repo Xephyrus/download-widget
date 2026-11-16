@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,46 +19,34 @@ import (
 )
 
 type ProgressEvent struct {
-	Type       string `json:"type"`
-	TaskID     string `json:"taskId"`
-	Current    int    `json:"current,omitempty"`
-	Total      int    `json:"total,omitempty"`
-	Filename   string `json:"filename,omitempty"`
-	URL        string `json:"url,omitempty"`
-	Filepath   string `json:"filepath,omitempty"`
-	Error      string `json:"error,omitempty"`
-	SuccessCount int  `json:"successCount,omitempty"`
-	FailCount    int  `json:"failCount,omitempty"`
+	Type         string `json:"type"`
+	TaskID       string `json:"taskId"`
+	Current      int    `json:"current,omitempty"`
+	Total        int    `json:"total,omitempty"`
+	Filename     string `json:"filename,omitempty"`
+	URL          string `json:"url,omitempty"`
+	Filepath     string `json:"filepath,omitempty"`
+	Error        string `json:"error,omitempty"`
+	SuccessCount int    `json:"successCount,omitempty"`
+	FailCount    int    `json:"failCount,omitempty"`
 	DownloadDir  string `json:"downloadDir,omitempty"`
 }
 
 type Notifier func(ProgressEvent)
 
 type Service struct {
-	cfg    config.Config
-	store  *db.Store
-	client *http.Client
+	cfg   config.Config
+	store *db.Store
 }
+
+// AllowedProxyPorts are the only ports the UI / clients may select.
+var AllowedProxyPorts = []int{7897, 7890}
 
 func New(cfg config.Config, store *db.Store) *Service {
-	proxyURL := &url.URL{
-		Scheme: "http",
-		Host:   fmt.Sprintf("%s:%d", cfg.ProxyHost, cfg.ProxyPort),
-	}
-	transport := &http.Transport{
-		Proxy: http.ProxyURL(proxyURL),
-	}
-	return &Service{
-		cfg:   cfg,
-		store: store,
-		client: &http.Client{
-			Timeout:   time.Duration(cfg.TimeoutSec) * time.Second,
-			Transport: transport,
-		},
-	}
+	return &Service{cfg: cfg, store: store}
 }
 
-func (s *Service) BatchDownload(ctx context.Context, taskID string, urls []string, cookie, taskName string, notify Notifier) {
+func (s *Service) BatchDownload(ctx context.Context, taskID string, urls []string, cookie, taskName string, proxyPort int, notify Notifier) {
 	folderID := strings.TrimSpace(taskName)
 	if folderID == "" {
 		folderID = taskID
@@ -66,6 +55,18 @@ func (s *Service) BatchDownload(ctx context.Context, taskID string, urls []strin
 		notify(ProgressEvent{Type: "task_error", TaskID: taskID, Error: err.Error()})
 		return
 	}
+
+	client, port, err := s.httpClient(proxyPort)
+	if err != nil {
+		notify(ProgressEvent{Type: "task_error", TaskID: taskID, Error: err.Error()})
+		return
+	}
+	notify(ProgressEvent{
+		Type:   "info",
+		TaskID: taskID,
+		Error:  fmt.Sprintf("使用代理 %s:%d", s.cfg.ProxyHost, port),
+	})
+
 	taskDir := filepath.Join(s.cfg.DownloadDir, folderID)
 	_ = os.MkdirAll(taskDir, 0o755)
 	_ = s.store.UpsertFolder(folderID, folderID, taskDir)
@@ -137,7 +138,7 @@ func (s *Service) BatchDownload(ctx context.Context, taskID string, urls []strin
 			URL:      rawURL,
 		})
 
-		savedPath, err := s.downloadImage(ctx, rawURL, savePath, cookie)
+		finalPath, err := s.downloadImage(ctx, client, rawURL, savePath, cookie)
 		if err != nil {
 			if ctx.Err() != nil {
 				notifyCancelled()
@@ -155,24 +156,25 @@ func (s *Service) BatchDownload(ctx context.Context, taskID string, urls []strin
 			})
 		} else {
 			successCount++
-			info, _ := os.Stat(savedPath)
+			info, _ := os.Stat(finalPath)
 			var size int64
 			if info != nil {
 				size = info.Size()
 			}
-			_ = s.store.AddFile(folderID, filepath.Base(savedPath), size, savedPath)
+			finalName := filepath.Base(finalPath)
+			_ = s.store.AddFile(folderID, finalName, size, finalPath)
 			notify(ProgressEvent{
 				Type:     "success",
 				TaskID:   taskID,
 				Current:  i + 1,
 				Total:    len(urls),
-				Filename: filepath.Base(savedPath),
+				Filename: finalName,
 				URL:      rawURL,
-				Filepath: savedPath,
+				Filepath: finalPath,
 			})
 		}
 
-		if i < len(urls)-1 {
+		if i < len(urls)-1 && s.cfg.DelayMS > 0 {
 			select {
 			case <-ctx.Done():
 				notifyCancelled()
@@ -192,7 +194,11 @@ func (s *Service) BatchDownload(ctx context.Context, taskID string, urls []strin
 	})
 }
 
-func (s *Service) FetchArtwork(id, cookie string) (map[string]any, error) {
+func (s *Service) FetchArtwork(id, cookie string, proxyPort int) (map[string]any, error) {
+	client, _, err := s.httpClient(proxyPort)
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequest(http.MethodGet, "https://www.pixiv.net/ajax/illust/"+url.PathEscape(id), nil)
 	if err != nil {
 		return nil, err
@@ -203,7 +209,7 @@ func (s *Service) FetchArtwork(id, cookie string) (map[string]any, error) {
 		req.Header.Set("Cookie", cookie)
 	}
 
-	resp, err := s.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +225,73 @@ func (s *Service) FetchArtwork(id, cookie string) (map[string]any, error) {
 	return decodeJSON(body)
 }
 
-func (s *Service) downloadImage(ctx context.Context, rawURL, savePath, cookie string) (string, error) {
+func (s *Service) httpClient(proxyPort int) (*http.Client, int, error) {
+	port, err := s.resolveProxyPort(proxyPort)
+	if err != nil {
+		return nil, 0, err
+	}
+	proxyURL := &url.URL{
+		Scheme: "http",
+		Host:   net.JoinHostPort(s.cfg.ProxyHost, fmt.Sprintf("%d", port)),
+	}
+	client := &http.Client{
+		Timeout: time.Duration(s.cfg.TimeoutSec) * time.Second,
+		Transport: &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+		},
+	}
+	return client, port, nil
+}
+
+func (s *Service) resolveProxyPort(want int) (int, error) {
+	if want != 0 {
+		if !isAllowedProxyPort(want) {
+			return 0, fmt.Errorf("不支持的代理端口 %d（可选 7897 / 7890）", want)
+		}
+		if !proxyReachable(s.cfg.ProxyHost, want) {
+			return 0, fmt.Errorf("代理 %s:%d 不可用", s.cfg.ProxyHost, want)
+		}
+		return want, nil
+	}
+
+	tried := make([]int, 0, 3)
+	seen := map[int]struct{}{}
+	for _, p := range append([]int{s.cfg.ProxyPort}, AllowedProxyPorts...) {
+		if p <= 0 || !isAllowedProxyPort(p) {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		tried = append(tried, p)
+		if proxyReachable(s.cfg.ProxyHost, p) {
+			return p, nil
+		}
+	}
+	return 0, fmt.Errorf("未检测到可用代理（已试 %v）", tried)
+}
+
+func isAllowedProxyPort(port int) bool {
+	for _, p := range AllowedProxyPorts {
+		if p == port {
+			return true
+		}
+	}
+	return false
+}
+
+func proxyReachable(host string, port int) bool {
+	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	conn, err := net.DialTimeout("tcp", addr, 400*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+func (s *Service) downloadImage(ctx context.Context, client *http.Client, rawURL, savePath, cookie string) (string, error) {
 	currentExt := strings.ToLower(strings.TrimPrefix(filepath.Ext(savePath), "."))
 	tryExts := uniqueExts(currentExt, []string{"jpg", "png"})
 
@@ -235,7 +307,7 @@ func (s *Service) downloadImage(ctx context.Context, rawURL, savePath, cookie st
 			targetPath = replaceExtInPath(savePath, ext)
 		}
 
-		if err := s.downloadOnce(ctx, targetURL, targetPath, cookie); err != nil {
+		if err := s.downloadOnce(ctx, client, targetURL, targetPath, cookie); err != nil {
 			if ctx.Err() != nil {
 				return "", ctx.Err()
 			}
@@ -250,7 +322,7 @@ func (s *Service) downloadImage(ctx context.Context, rawURL, savePath, cookie st
 	return "", lastErr
 }
 
-func (s *Service) downloadOnce(ctx context.Context, rawURL, savePath, cookie string) error {
+func (s *Service) downloadOnce(ctx context.Context, client *http.Client, rawURL, savePath, cookie string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return err
@@ -261,7 +333,7 @@ func (s *Service) downloadOnce(ctx context.Context, rawURL, savePath, cookie str
 		req.Header.Set("Cookie", cookie)
 	}
 
-	resp, err := s.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

@@ -29,7 +29,7 @@
       name="htmx-config"
       content="ws.pauseOnBackground:false ws.reconnect:true ws.reconnectDelay:500ms ws.reconnectMaxDelay:15s"
     />
-    <link rel="stylesheet" href="/static/app.css?v=20" />
+    <link rel="stylesheet" href="/static/app.css?v=23" />
     <script src="/static/vendor/htmx.min.js" defer></script>
     <script defer>
       // Reinforce official config after htmx loads, before hx-ws initializes.
@@ -44,7 +44,7 @@
       })();
     </script>
     <script src="/static/vendor/hx-ws.min.js?v=20" defer></script>
-    <script type="module" src="/static/js/downloader.js?v=20"></script>
+    <script type="module" src="/static/js/downloader.js?v=23"></script>
   </head>
   <body>
     <div
@@ -116,7 +116,6 @@
                 name="count"
                 type="number"
                 min="1"
-                max="100"
                 step="1"
                 placeholder="例如 12"
                 hx-on:change="localStorage.setItem('count', this.value)"
@@ -131,6 +130,19 @@
                 placeholder="包含 PHPSESSID 的 Cookie 字符串"
                 hx-on:change="localStorage.setItem('cookie', this.value)"
               />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="proxyPort">代理端口</label>
+              <select
+                id="proxyPort"
+                name="proxyPort"
+                hx-on:change="localStorage.setItem('proxyPort', this.value)"
+              >
+                <option value="0">自动检测（7897 / 7890）</option>
+                <option value="7897">127.0.0.1:7897</option>
+                <option value="7890">127.0.0.1:7890</option>
+              </select>
+              <p class="field-hint">本机多开 VPN 时可选手动端口；默认自动探测可用端口。</p>
             </div>
             <div class="form-group">
               <label class="field-label" for="taskName">任务名称 / 作品 ID</label>

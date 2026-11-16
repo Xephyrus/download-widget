@@ -29,6 +29,7 @@ func newRenderer() (*renderer, error) {
 		"formatTime": formatDateTime,
 		"urlquery":   url.QueryEscape,
 		"urlpath":    url.PathEscape,
+		"joinTags":   joinTagsCSV,
 		"add":        func(a, b int) int { return a + b },
 	}
 	tmpl, err := template.New("root").Funcs(funcMap).ParseFS(templateFS, "templates/*.html")
@@ -93,12 +94,16 @@ func formatDateTime(t time.Time) string {
 
 func buildListQuery(q url.Values) string {
 	vals := url.Values{}
-	for _, key := range []string{"pageSize", "sortBy", "sortOrder", "search", "minFileCount", "maxFileCount", "exactMatch", "startDate", "endDate"} {
+	for _, key := range []string{"pageSize", "sortBy", "sortOrder", "search", "tag", "minFileCount", "maxFileCount", "exactMatch", "startDate", "endDate"} {
 		if v := strings.TrimSpace(q.Get(key)); v != "" {
 			vals.Set(key, v)
 		}
 	}
 	return vals.Encode()
+}
+
+func joinTagsCSV(tags []string) string {
+	return strings.Join(tags, ", ")
 }
 
 func (s *Server) buildListView(r *http.Request) (*listView, error) {
@@ -140,7 +145,7 @@ func (s *Server) buildListView(r *http.Request) (*listView, error) {
 
 	q := r.URL.Query()
 	_ = r.ParseForm()
-	for _, key := range []string{"pageSize", "sortBy", "sortOrder", "search", "minFileCount", "maxFileCount", "exactMatch", "startDate", "endDate"} {
+	for _, key := range []string{"pageSize", "sortBy", "sortOrder", "search", "tag", "minFileCount", "maxFileCount", "exactMatch", "startDate", "endDate"} {
 		if q.Get(key) == "" && r.Form.Get(key) != "" {
 			q.Set(key, r.Form.Get(key))
 		}
@@ -206,6 +211,8 @@ func statusFromEvent(ev downloader.ProgressEvent) (class, icon, message, linkHre
 	switch ev.Type {
 	case "clearing":
 		return "status-start", "▣", fmt.Sprintf("正在清空目录并准备重新下载…（任务 %s）", ev.TaskID), "", ""
+	case "info":
+		return "status-start", "·", ev.Error, "", ""
 	case "start":
 		return "status-start", "↓", fmt.Sprintf("开始下载：%s（%d/%d）", ev.Filename, ev.Current, ev.Total), "", ""
 	case "success":

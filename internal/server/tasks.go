@@ -11,7 +11,7 @@ type runningTask struct {
 	folderID string
 }
 
-func (s *Server) startDownloadTask(taskID string, urls []string, cookie, taskName string, redownload bool) {
+func (s *Server) startDownloadTask(taskID string, urls []string, cookie, taskName string, redownload bool, proxyPort int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	folderID := taskName
 	if folderID == "" {
@@ -47,7 +47,7 @@ func (s *Server) startDownloadTask(taskID string, urls []string, cookie, taskNam
 				return
 			}
 		}
-		s.dl.BatchDownload(ctx, taskID, urls, cookie, taskName, s.broadcastHTMX)
+		s.dl.BatchDownload(ctx, taskID, urls, cookie, taskName, proxyPort, s.broadcastHTMX)
 	}()
 }
 

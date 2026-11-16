@@ -46,6 +46,7 @@ func parseListFilter(r *http.Request) db.ListFilter {
 		SortBy:     get("sortBy", "createdAt"),
 		SortOrder:  get("sortOrder", "desc"),
 		Search:     get("search", ""),
+		Tag:        get("tag", ""),
 		ExactMatch: get("exactMatch", "") == "true",
 	}
 	if v := get("minFileCount", ""); v != "" {
@@ -95,6 +96,7 @@ func listFilterEcho(r *http.Request, filter db.ListFilter) map[string]any {
 	}
 	return map[string]any{
 		"search":       nullIfEmpty(get("search")),
+		"tag":          nullIfEmpty(get("tag")),
 		"startDate":    nullIfEmpty(get("startDate")),
 		"endDate":      nullIfEmpty(get("endDate")),
 		"minFileCount": nullIfEmpty(get("minFileCount")),

@@ -655,6 +655,13 @@ label.field-label {
   color: var(--muted);
 }
 
+.field-hint {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 input[type='text'],
 input[type='number'],
 textarea,

@@ -121,3 +121,43 @@
 {{template "gallery_status" .}}
 </hx-partial>
 {{end}}
+
+{{define "folder_tags_panel"}}
+<div class="tags-panel" id="tagsPanel">
+  <div class="tags-panel-head">
+    <h2 class="panel-title">标签</h2>
+    <p class="panel-desc">用逗号分隔多个标签；保存后可在图库按标签筛选。</p>
+  </div>
+  {{if .Tags}}
+  <div class="tag-list tag-list--lg">
+    {{range .Tags}}
+    <a class="tag-chip" href="/?tag={{urlquery .}}">{{.}}</a>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="tags-empty">尚未添加标签</p>
+  {{end}}
+  <form
+    class="tag-edit-form tag-edit-form--inline"
+    hx-post="/partials/folders/{{urlpath .ID}}/tags"
+    hx-target="#tagsPanel"
+    hx-swap="outerHTML"
+  >
+    <label class="field-label" for="artworkTagsInput">编辑标签</label>
+    <input
+      id="artworkTagsInput"
+      type="text"
+      name="tags"
+      value="{{joinTags .Tags}}"
+      placeholder="例如：风景, 人像, 未分类"
+      autocomplete="off"
+      list="allTagsList"
+    />
+    <button type="submit" class="btn btn-primary">保存标签</button>
+  </form>
+</div>
+{{end}}
+
+{{define "folder_tags_editor"}}
+{{template "folder_tags_panel" .}}
+{{end}}

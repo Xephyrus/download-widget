@@ -32,17 +32,19 @@ type Folder struct {
 	CreatedAt  time.Time `json:"createdAt"`
 	ModifiedAt time.Time `json:"modifiedAt"`
 	Path       string    `json:"path"`
+	Tags       []string  `json:"tags,omitempty"`
 	Files      []string  `json:"files,omitempty"`
 }
 
 // Compact folder record. Key is folder id.
 type folderRec struct {
-	Name       string `json:"n,omitempty"`
-	Path       string `json:"p,omitempty"`
-	FileCount  int    `json:"f,omitempty"`
-	Size       int64  `json:"s,omitempty"`
-	CreatedAt  int64  `json:"c,omitempty"` // unix seconds
-	ModifiedAt int64  `json:"m,omitempty"`
+	Name       string   `json:"n,omitempty"`
+	Path       string   `json:"p,omitempty"`
+	FileCount  int      `json:"f,omitempty"`
+	Size       int64    `json:"s,omitempty"`
+	CreatedAt  int64    `json:"c,omitempty"` // unix seconds
+	ModifiedAt int64    `json:"m,omitempty"`
+	Tags       []string `json:"t,omitempty"`
 }
 
 type ListFilter struct {
@@ -51,6 +53,7 @@ type ListFilter struct {
 	SortBy       string
 	SortOrder    string
 	Search       string
+	Tag          string // exact tag match (case-insensitive)
 	ExactMatch   bool
 	MinFileCount *int
 	MaxFileCount *int
@@ -232,10 +235,105 @@ func (s *Store) UpsertFolder(id, name, path string) error {
 			if prev, ok := decodeFolder(raw); ok {
 				rec.FileCount = prev.FileCount
 				rec.Size = prev.Size
+				rec.Tags = prev.Tags
+				if rec.Name == "" {
+					rec.Name = prev.Name
+				}
 			}
 		}
 		return putFolder(b, id, rec)
 	})
+}
+
+// SetFolderTags replaces tags for a folder. Pass nil/empty to clear.
+func (s *Store) SetFolderTags(id string, tags []string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("无效的文件夹 ID")
+	}
+	normalized := NormalizeTags(tags)
+	return s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketFolders)
+		raw := b.Get([]byte(id))
+		if raw == nil {
+			return fmt.Errorf("文件夹不存在")
+		}
+		rec, ok := decodeFolder(raw)
+		if !ok {
+			return fmt.Errorf("文件夹记录损坏")
+		}
+		rec.Tags = normalized
+		return putFolder(b, id, rec)
+	})
+}
+
+// ListAllTags returns unique tags across all folders, sorted case-insensitively.
+func (s *Store) ListAllTags() ([]string, error) {
+	seen := map[string]string{}
+	err := s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketFolders)
+		if b == nil {
+			return nil
+		}
+		return b.ForEach(func(_, v []byte) error {
+			rec, ok := decodeFolder(v)
+			if !ok {
+				return nil
+			}
+			for _, tag := range rec.Tags {
+				key := strings.ToLower(tag)
+				if _, ok := seen[key]; !ok {
+					seen[key] = tag
+				}
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(seen))
+	for _, tag := range seen {
+		out = append(out, tag)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return strings.ToLower(out[i]) < strings.ToLower(out[j])
+	})
+	return out, nil
+}
+
+// NormalizeTags trims, dedupes (case-insensitive), and caps length/count.
+func NormalizeTags(tags []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(tags))
+	for _, raw := range tags {
+		t := strings.TrimSpace(raw)
+		t = strings.Trim(t, "#　")
+		if t == "" {
+			continue
+		}
+		runes := []rune(t)
+		if len(runes) > 32 {
+			t = string(runes[:32])
+		}
+		key := strings.ToLower(t)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, t)
+		if len(out) >= 20 {
+			break
+		}
+	}
+	return out
+}
+
+func ParseTagsCSV(raw string) []string {
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '，' || r == ';' || r == '；' || r == '\n' || r == '\r' || r == '\t'
+	})
+	return NormalizeTags(parts)
 }
 
 func (s *Store) FileExists(folderID, baseName string) (string, bool, error) {
@@ -381,13 +479,27 @@ func (s *Store) ListFolders(f ListFilter) (*ListResult, error) {
 }
 
 func matchFolder(item Folder, f ListFilter) bool {
+	if f.Tag != "" && !folderHasTag(item.Tags, f.Tag) {
+		return false
+	}
 	if f.Search != "" {
+		q := strings.ToLower(f.Search)
 		if f.ExactMatch {
-			if item.Name != f.Search {
+			if item.Name != f.Search && !folderHasTag(item.Tags, f.Search) {
 				return false
 			}
-		} else if !strings.Contains(strings.ToLower(item.Name), strings.ToLower(f.Search)) {
-			return false
+		} else {
+			nameHit := strings.Contains(strings.ToLower(item.Name), q)
+			tagHit := false
+			for _, t := range item.Tags {
+				if strings.Contains(strings.ToLower(t), q) {
+					tagHit = true
+					break
+				}
+			}
+			if !nameHit && !tagHit {
+				return false
+			}
 		}
 	}
 	if f.MinFileCount != nil && item.FileCount < *f.MinFileCount {
@@ -403,6 +515,19 @@ func matchFolder(item Folder, f ListFilter) bool {
 		return false
 	}
 	return true
+}
+
+func folderHasTag(tags []string, want string) bool {
+	want = strings.ToLower(strings.TrimSpace(want))
+	if want == "" {
+		return false
+	}
+	for _, t := range tags {
+		if strings.ToLower(t) == want {
+			return true
+		}
+	}
+	return false
 }
 
 func sortFolders(all []Folder, sortBy, sortOrder string) {
@@ -652,6 +777,7 @@ func folderFromRec(id string, rec folderRec) Folder {
 	if name == "" {
 		name = id
 	}
+	tags := append([]string(nil), rec.Tags...)
 	return Folder{
 		ID:         id,
 		Name:       name,
@@ -660,6 +786,7 @@ func folderFromRec(id string, rec folderRec) Folder {
 		Size:       rec.Size,
 		CreatedAt:  unixTime(rec.CreatedAt),
 		ModifiedAt: unixTime(rec.ModifiedAt),
+		Tags:       tags,
 	}
 }
 

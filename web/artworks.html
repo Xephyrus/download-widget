@@ -28,7 +28,7 @@
     <link rel="stylesheet" href="/static/vendor/fancybox.css?v=15" />
     <script src="/static/vendor/htmx.min.js" defer></script>
     <script src="/static/vendor/fancybox.umd.js?v=15" defer></script>
-    <script type="module" src="/static/js/artworks.js?v=16"></script>
+    <script type="module" src="/static/js/artworks.js?v=22"></script>
   </head>
   <body class="page-artworks">
     <div
@@ -78,12 +78,22 @@
           <span class="pill" id="artworkId"><!--SSR_ID_START-->-<!--SSR_ID_END--></span>
           <span id="status"><!--SSR_STATUS_START--><!--SSR_STATUS_END--></span>
         </div>
+<!--SSR_TAGS_START-->
+        <div class="tags-panel" id="tagsPanel">
+          <div class="tags-panel-head">
+            <h2 class="panel-title">标签</h2>
+            <p class="panel-desc">用逗号分隔多个标签；保存后可在图库按标签筛选。</p>
+          </div>
+          <p class="tags-empty">加载中…</p>
+        </div>
+<!--SSR_TAGS_END-->
         <div id="gallery" class="gallery" data-ssr="0">
 <!--SSR_GALLERY_START-->
 <!--SSR_GALLERY_END-->
         </div>
         <p class="hint">图片懒加载；打开大图后可用浏览器返回关闭灯箱。</p>
       </section>
+      <datalist id="allTagsList"></datalist>
       </main>
     </div>
   </body>

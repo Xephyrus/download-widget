@@ -59,6 +59,52 @@ export SYNC_ON_START=1
 | `/download` | 批量下载（表单 + `hx-ws` 日志） |
 | `/artworks/:id` | 作品画廊（缩略图 + Fancybox） |
 
+## 持久化运行
+
+推荐把环境变量写进仓库根目录的 `config.env`（从 `config.env.example` 复制），再交给脚本后台启动；登录 Windows 后自动拉起。
+
+### 1. 准备配置
+
+```powershell
+cd <repo>
+copy config.env.example config.env
+# 编辑 config.env：至少确认 DOWNLOAD_DIR、DB_PATH、WEB_DIR、PORT
+./build.ps1
+```
+
+`config.env` 已加入 `.gitignore`，不会进仓库。日志目录为 `logs/`（同样忽略）。
+
+### 2. Windows：后台启动 / 停止
+
+```powershell
+./scripts/start.ps1    # 按 config.env 后台运行，输出到 logs/
+./scripts/stop.ps1     # 结束 pixiv-downloader 进程
+```
+
+### 3. Windows：开机（登录）自启
+
+用当前用户的**计划任务**注册（无需改写成 Windows Service）：
+
+```powershell
+./scripts/install-autostart.ps1 -StartNow   # 注册任务并立即启动
+# 卸载自启（可选同时停进程）：
+./scripts/uninstall-autostart.ps1 -Stop
+```
+
+- 任务名默认 `PixivShelf`，触发器为**当前用户登录**
+- 失败后最多自动重试 3 次（间隔 1 分钟）
+- 查看任务：`taskschd.msc` → 任务计划程序库 → `PixivShelf`
+
+### 4. Linux：systemd
+
+```sh
+sudo cp scripts/pixiv-shelf.service /etc/systemd/system/
+# 按实际安装路径修改 WorkingDirectory / EnvironmentFile / ExecStart
+sudo systemctl daemon-reload
+sudo systemctl enable --now pixiv-shelf
+sudo systemctl status pixiv-shelf
+```
+
 ## 获取 Pixiv Cookie
 
 下载原图需要已登录账号的 Cookie（至少包含 `PHPSESSID`）。按浏览器开发者工具复制即可：
@@ -82,6 +128,8 @@ export SYNC_ON_START=1
 ```
 main.go                 # 入口：同步、compact、监听
 build.ps1 / build.sh    # Release 构建（Windows / Unix）
+config.env.example      # 环境变量模板（复制为 config.env）
+scripts/                # 后台启动 / 计划任务自启 / systemd 单元
 internal/
   config/               # 环境变量
   db/                   # bbolt 索引与 SyncFromDisk
@@ -116,6 +164,7 @@ web/
 - 若 `DB_PATH` 仍是旧 SQLite 文件，会改名为 `*.sqlite.bak` 并强制同步重建。
 - Cookie 仅通过请求头 `X-Pixiv-Cookie` 或表单字段传递，不支持 `?cookie=`。
 - **务必设置正确的 `DOWNLOAD_DIR`**。同步会清理「磁盘上已不存在」的索引项；若扫描结果为空但库中仍有记录，会跳过清理，避免误清空索引。同步失败时不会执行 Compact。
+- 下载页可选择代理端口 `7897` / `7890`，或「自动检测」；无需改 `PROXY_PORT` 重启服务。
 
 ## 前端
 

@@ -15,6 +15,8 @@ async function fillFromArtworkId(id) {
     const cookie = (document.getElementById('cookie')?.value || '').trim();
     const headers = {};
     if (cookie) headers['X-Pixiv-Cookie'] = cookie;
+    const proxyPort = (document.getElementById('proxyPort')?.value || '0').trim();
+    if (proxyPort) headers['X-Proxy-Port'] = proxyPort;
     const res = await fetch(`/api/artwork-id/${encodeURIComponent(id)}`, { headers });
     const data = await res.json();
     if (!res.ok || data.success === false) {
@@ -381,7 +383,11 @@ window.addEventListener('online', () => {
 });
 
 window.addEventListener('pageshow', () => {
-  ensureWsHealthy('pageshow');
+  try {
+    ensureWsHealthy('pageshow');
+  } catch {
+    /* ignore */
+  }
 });
 
 // Periodic check while a download is marked running (catches silent half-open sockets).
@@ -397,7 +403,7 @@ window.setInterval(() => {
 }, 5000);
 
 async function restoreForm() {
-  for (const key of ['url', 'count', 'taskName', 'cookie']) {
+  for (const key of ['url', 'count', 'taskName', 'cookie', 'proxyPort']) {
     const v = localStorage.getItem(key);
     if (v) {
       const input = document.getElementById(key);

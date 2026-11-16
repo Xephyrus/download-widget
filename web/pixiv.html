@@ -24,9 +24,9 @@
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#0f7460" />
-    <link rel="stylesheet" href="/static/app.css?v=15" />
+    <link rel="stylesheet" href="/static/app.css?v=24" />
     <script src="/static/vendor/htmx.min.js" defer></script>
-    <script type="module" src="/static/js/list.js?v=15"></script>
+    <script type="module" src="/static/js/list.js?v=24"></script>
   </head>
   <body>
     <div
@@ -64,7 +64,7 @@
         <div class="page-hero-row">
           <div>
             <h1>本地下载库</h1>
-            <p>浏览、筛选与管理已下载的作品文件夹。</p>
+            <p>浏览、筛选、打标签与管理已下载的作品文件夹。</p>
           </div>
           <a class="btn btn-primary" href="/download">新建下载</a>
         </div>
@@ -94,7 +94,7 @@
               type="text"
               name="search"
               id="searchInput"
-              placeholder="搜索文件夹名称…"
+              placeholder="搜索名称或标签…"
               hx-get="/partials/list"
               hx-trigger="input delay:300ms, keyup[key=='Enter']"
               hx-include="#listFilters"
@@ -107,6 +107,22 @@
         </div>
 
         <div class="filters">
+          <div class="filter-group">
+            <label for="tagFilter">标签</label>
+            <input
+              type="text"
+              name="tag"
+              id="tagFilter"
+              list="allTagsList"
+              placeholder="精确标签，如：风景"
+              hx-get="/partials/list"
+              hx-trigger="change delay:200ms, keyup[key=='Enter']"
+              hx-include="#listFilters"
+              hx-target="#tableBody"
+              hx-swap="innerHTML settle:0s"
+              hx-indicator="#tableContainer"
+            />
+          </div>
           <div class="filter-group">
             <label for="pageSizeSelect">每页</label>
             <select name="pageSize" id="pageSizeSelect">
@@ -155,6 +171,7 @@
           </button>
         </div>
         <input type="hidden" name="page" value="1" />
+        <datalist id="allTagsList"></datalist>
       </form>
 
       <div class="panel table-container" id="tableContainer">
@@ -165,6 +182,7 @@
               <thead>
                 <tr>
                   <th>文件夹</th>
+                  <th>标签</th>
                   <th>文件数</th>
                   <th>大小</th>
                   <th>创建时间</th>

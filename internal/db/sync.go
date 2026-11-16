@@ -88,6 +88,13 @@ func (s *Store) SyncFromDisk(downloadDir string) (folders int, files int, err er
 				CreatedAt:  created.Unix(),
 				ModifiedAt: modified.Unix(),
 			}
+			// Preserve custom metadata (name / tags) across disk sync.
+			if raw := fb.Get([]byte(folderID)); raw != nil {
+				if prev, ok := decodeFolder(raw); ok {
+					rec.Name = prev.Name
+					rec.Tags = prev.Tags
+				}
+			}
 			if err := putFolder(fb, folderID, rec); err != nil {
 				return err
 			}
@@ -131,6 +138,7 @@ func (s *Store) SyncFromDisk(downloadDir string) (folders int, files int, err er
 				updated.CreatedAt = created.Unix()
 				updated.ModifiedAt = modified.Unix()
 				updated.Path = s.compactFolderPath(folderID, folderPath)
+				// Name/Tags already preserved above; keep them through stats refresh.
 				_ = putFolder(fb, folderID, updated)
 			}
 		}

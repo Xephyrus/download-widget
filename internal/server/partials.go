@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Xephyrus/download-widget/internal/db"
 	"github.com/Xephyrus/download-widget/internal/safepath"
 )
 
@@ -25,12 +26,31 @@ func (s *Server) handlePartialsList(w http.ResponseWriter, r *http.Request) {
 	s.rend.render(w, "list_partials", view)
 }
 
-func (s *Server) handlePartialsDeleteFolder(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePartialsFolders(w http.ResponseWriter, r *http.Request) {
+	rawPath := strings.TrimPrefix(r.URL.Path, "/partials/folders/")
+	rawPath = strings.Trim(rawPath, "/")
+	if rawPath == "" {
+		http.Error(w, "无效ID", http.StatusBadRequest)
+		return
+	}
+
+	if strings.HasSuffix(rawPath, "/tags") {
+		idPart := strings.TrimSuffix(rawPath, "/tags")
+		idPart = strings.Trim(idPart, "/")
+		folderID, err := url.PathUnescape(idPart)
+		if err != nil || folderID == "" {
+			http.Error(w, "无效ID", http.StatusBadRequest)
+			return
+		}
+		s.handlePartialsFolderTags(w, r, folderID)
+		return
+	}
+
 	if r.Method != http.MethodDelete {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	folderID, err := url.PathUnescape(strings.TrimPrefix(r.URL.Path, "/partials/folders/"))
+	folderID, err := url.PathUnescape(rawPath)
 	if err != nil || folderID == "" {
 		http.Error(w, "无效ID", http.StatusBadRequest)
 		return
@@ -55,6 +75,58 @@ func (s *Server) handlePartialsDeleteFolder(w http.ResponseWriter, r *http.Reque
 	s.rend.render(w, "list_partials", view)
 }
 
+func (s *Server) handlePartialsFolderTags(w http.ResponseWriter, r *http.Request, folderID string) {
+	switch r.Method {
+	case http.MethodGet:
+		folder, err := s.store.GetFolder(folderID)
+		if err != nil || folder == nil {
+			http.Error(w, "文件夹不存在", http.StatusNotFound)
+			return
+		}
+		s.rend.render(w, "folder_tags_editor", map[string]any{
+			"ID":   folder.ID,
+			"Name": folder.Name,
+			"Tags": folder.Tags,
+		})
+	case http.MethodPost, http.MethodPut:
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "无效的表单", http.StatusBadRequest)
+			return
+		}
+		if err := safepath.ValidateFolderID(folderID); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		tags := db.ParseTagsCSV(r.FormValue("tags"))
+		if err := s.store.SetFolderTags(folderID, tags); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// Prefer returning refreshed list when called from gallery table.
+		if strings.Contains(r.Header.Get("HX-Target"), "tableBody") || r.FormValue("refreshList") == "1" {
+			view, err := s.buildListView(r)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			s.rend.render(w, "list_partials", view)
+			return
+		}
+		folder, err := s.store.GetFolder(folderID)
+		if err != nil || folder == nil {
+			http.Error(w, "保存成功，但读取失败", http.StatusInternalServerError)
+			return
+		}
+		s.rend.render(w, "folder_tags_panel", map[string]any{
+			"ID":   folder.ID,
+			"Name": folder.Name,
+			"Tags": folder.Tags,
+		})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func (s *Server) handlePartialsDownload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -71,9 +143,6 @@ func (s *Server) handlePartialsDownload(w http.ResponseWriter, r *http.Request) 
 	count, _ := strconv.Atoi(r.FormValue("count"))
 	if count < 1 {
 		count = 1
-	}
-	if count > 100 {
-		count = 100
 	}
 	if cookie == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -100,12 +169,34 @@ func (s *Server) handlePartialsDownload(w http.ResponseWriter, r *http.Request) 
 		s.cancelDownloadTasksForFolder(taskName)
 	}
 
+	proxyPort, err := parseProxyPort(r.FormValue("proxyPort"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		s.rend.render(w, "download_error", map[string]any{"Message": err.Error()})
+		return
+	}
+
 	taskID := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	s.startDownloadTask(taskID, urls, cookie, taskName, redownload)
+	s.startDownloadTask(taskID, urls, cookie, taskName, redownload, proxyPort)
 	s.rend.render(w, "download_submitted", map[string]any{
 		"TaskID":     taskID,
 		"Redownload": redownload,
 	})
+}
+
+func parseProxyPort(v string) (int, error) {
+	v = strings.TrimSpace(v)
+	if v == "" || v == "0" || strings.EqualFold(v, "auto") {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("无效的代理端口")
+	}
+	if n != 7890 && n != 7897 {
+		return 0, fmt.Errorf("不支持的代理端口 %d（可选 7897 / 7890）", n)
+	}
+	return n, nil
 }
 
 func formTruthy(v string) bool {

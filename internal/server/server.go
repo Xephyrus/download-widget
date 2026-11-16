@@ -128,15 +128,17 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/artworks/", s.handleArtworksPage)
 
 	s.mux.HandleFunc("/partials/list", s.handlePartialsList)
-	s.mux.HandleFunc("/partials/folders/", s.handlePartialsDeleteFolder)
+	s.mux.HandleFunc("/partials/folders/", s.handlePartialsFolders)
 	s.mux.HandleFunc("/partials/download", s.handlePartialsDownload)
 	s.mux.HandleFunc("/partials/download/cancel", s.handlePartialsDownloadCancel)
 	s.mux.HandleFunc("/partials/artworks/", s.handlePartialsArtworks)
 
 	s.mux.HandleFunc("/api/list", s.handleList)
+	s.mux.HandleFunc("/api/tags", s.handleListTags)
 	s.mux.HandleFunc("/api/download", s.handleDownload)
 	s.mux.HandleFunc("/api/download/cancel", s.handleAPIDownloadCancel)
 	s.mux.HandleFunc("/api/delete/", s.handleDelete)
+	s.mux.HandleFunc("/api/folders/", s.handleAPIFolders)
 	s.mux.HandleFunc("/api/artworks/", s.handleArtworkImages)
 	s.mux.HandleFunc("/api/artwork-id/", s.handleArtworkID)
 	s.mux.HandleFunc("/ws", s.handleWS)
@@ -246,6 +248,12 @@ func (s *Server) handleArtworksPage(w http.ResponseWriter, r *http.Request) {
 	} else {
 		data["Images"] = images
 	}
+	if id != "" {
+		if folder, err := s.store.GetFolder(id); err == nil && folder != nil {
+			data["Name"] = folder.Name
+			data["Tags"] = folder.Tags
+		}
+	}
 
 	if id != "" {
 		html = injectSSR(html, "<!--SSR_ID_START-->", "<!--SSR_ID_END-->", template.HTMLEscapeString(id))
@@ -256,6 +264,9 @@ func (s *Server) handleArtworksPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if status, err := s.rend.renderString("gallery_status", data); err == nil {
 		html = injectSSR(html, "<!--SSR_STATUS_START-->", "<!--SSR_STATUS_END-->", status)
+	}
+	if tagsHTML, err := s.rend.renderString("folder_tags_panel", data); err == nil {
+		html = injectSSR(html, "<!--SSR_TAGS_START-->", "<!--SSR_TAGS_END-->", tagsHTML)
 	}
 	writeHTML(w, http.StatusOK, html)
 }
@@ -331,6 +342,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		Cookie     string   `json:"cookie"`
 		TaskName   string   `json:"taskName"`
 		Redownload bool     `json:"redownload"`
+		ProxyPort  int      `json:"proxyPort"`
 	}
 	if err := jsonDecode(r, &req); err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "无效的请求体")
@@ -352,18 +364,22 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		writeJSONErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	proxyPort := req.ProxyPort
+	if proxyPort != 0 && proxyPort != 7890 && proxyPort != 7897 {
+		writeJSONErr(w, http.StatusBadRequest, "不支持的代理端口（可选 7897 / 7890）")
+		return
+	}
 	if req.Redownload {
 		s.cancelDownloadTasksForFolder(taskName)
 	}
-
 	taskID := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	writeJSONOK(w, map[string]any{
 		"taskId":     taskID,
 		"redownload": req.Redownload,
+		"proxyPort":  proxyPort,
 		"message":    "任务已开始，将通过WebSocket推送进度",
 	})
-
-	s.startDownloadTask(taskID, req.URLs, req.Cookie, taskName, req.Redownload)
+	s.startDownloadTask(taskID, req.URLs, req.Cookie, taskName, req.Redownload, proxyPort)
 }
 
 func (s *Server) handleAPIDownloadCancel(w http.ResponseWriter, r *http.Request) {
@@ -433,6 +449,74 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
+	if !methodAllowed(w, r, http.MethodGet) {
+		return
+	}
+	tags, err := s.store.ListAllTags()
+	if err != nil {
+		writeJSONErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSONOK(w, map[string]any{"tags": tags})
+}
+
+func (s *Server) handleAPIFolders(w http.ResponseWriter, r *http.Request) {
+	rawPath := strings.TrimPrefix(r.URL.Path, "/api/folders/")
+	rawPath = strings.Trim(rawPath, "/")
+	if !strings.HasSuffix(rawPath, "/tags") {
+		http.NotFound(w, r)
+		return
+	}
+	idPart := strings.Trim(strings.TrimSuffix(rawPath, "/tags"), "/")
+	folderID, err := url.PathUnescape(idPart)
+	if err != nil || folderID == "" {
+		writeJSONErr(w, http.StatusBadRequest, "无效ID")
+		return
+	}
+	if err := safepath.ValidateFolderID(folderID); err != nil {
+		writeJSONErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		folder, err := s.store.GetFolder(folderID)
+		if err != nil || folder == nil {
+			writeJSONErr(w, http.StatusNotFound, "文件夹不存在")
+			return
+		}
+		writeJSONOK(w, map[string]any{"id": folder.ID, "tags": folder.Tags})
+	case http.MethodPut, http.MethodPost:
+		var req struct {
+			Tags []string `json:"tags"`
+			Raw  string   `json:"tagsText"`
+		}
+		_ = r.ParseForm()
+		if ct := r.Header.Get("Content-Type"); strings.Contains(ct, "application/json") {
+			if err := jsonDecode(r, &req); err != nil {
+				writeJSONErr(w, http.StatusBadRequest, "无效的请求体")
+				return
+			}
+		} else {
+			req.Raw = r.FormValue("tags")
+		}
+		tags := req.Tags
+		if len(tags) == 0 && req.Raw != "" {
+			tags = db.ParseTagsCSV(req.Raw)
+		} else {
+			tags = db.NormalizeTags(tags)
+		}
+		if err := s.store.SetFolderTags(folderID, tags); err != nil {
+			writeJSONErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSONOK(w, map[string]any{"id": folderID, "tags": tags})
+	default:
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
 func (s *Server) handleArtworkImages(w http.ResponseWriter, r *http.Request) {
 	if !methodAllowed(w, r, http.MethodGet) {
 		return
@@ -470,7 +554,13 @@ func (s *Server) handleArtworkID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cookie := pixivCookieFromRequest(r)
-	data, err := s.dl.FetchArtwork(id, cookie)
+	proxyPort, _ := parseProxyPort(r.Header.Get("X-Proxy-Port"))
+	if q := strings.TrimSpace(r.URL.Query().Get("proxyPort")); q != "" {
+		if p, err := parseProxyPort(q); err == nil {
+			proxyPort = p
+		}
+	}
+	data, err := s.dl.FetchArtwork(id, cookie, proxyPort)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadGateway, err.Error())
 		return
