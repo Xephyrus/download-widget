@@ -83,7 +83,10 @@ func cacheStatic(next http.Handler) http.Handler {
 		switch {
 		case strings.HasPrefix(path, "vendor/"):
 			w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
-		case strings.HasSuffix(path, ".css"), strings.HasSuffix(path, ".js"), strings.HasSuffix(path, ".svg"):
+		case strings.HasSuffix(path, ".css"), strings.HasSuffix(path, ".js"):
+			// App JS/CSS change often; avoid sticky module caches (imports have no ?v=).
+			w.Header().Set("Cache-Control", "no-cache")
+		case strings.HasSuffix(path, ".svg"):
 			w.Header().Set("Cache-Control", "public, max-age=3600")
 		}
 		next.ServeHTTP(w, r)
@@ -489,11 +492,12 @@ func (s *Server) handleAPIFolders(w http.ResponseWriter, r *http.Request) {
 		writeJSONOK(w, map[string]any{"id": folder.ID, "tags": folder.Tags})
 	case http.MethodPut, http.MethodPost:
 		var req struct {
-			Tags []string `json:"tags"`
-			Raw  string   `json:"tagsText"`
+			Tags *[]string `json:"tags"`
+			Raw  string    `json:"tagsText"`
 		}
 		_ = r.ParseForm()
-		if ct := r.Header.Get("Content-Type"); strings.Contains(ct, "application/json") {
+		ct := r.Header.Get("Content-Type")
+		if strings.Contains(ct, "application/json") {
 			if err := jsonDecode(r, &req); err != nil {
 				writeJSONErr(w, http.StatusBadRequest, "无效的请求体")
 				return
@@ -501,17 +505,26 @@ func (s *Server) handleAPIFolders(w http.ResponseWriter, r *http.Request) {
 		} else {
 			req.Raw = r.FormValue("tags")
 		}
-		tags := req.Tags
-		if len(tags) == 0 && req.Raw != "" {
+		var tags []string
+		switch {
+		case req.Tags != nil:
+			tags = db.NormalizeTags(*req.Tags)
+		case req.Raw != "":
 			tags = db.ParseTagsCSV(req.Raw)
-		} else {
-			tags = db.NormalizeTags(tags)
+		default:
+			// Explicit empty body / empty form clears tags.
+			tags = nil
 		}
 		if err := s.store.SetFolderTags(folderID, tags); err != nil {
 			writeJSONErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		writeJSONOK(w, map[string]any{"id": folderID, "tags": tags})
+		folder, err := s.store.GetFolder(folderID)
+		if err != nil || folder == nil {
+			writeJSONOK(w, map[string]any{"id": folderID, "tags": tags})
+			return
+		}
+		writeJSONOK(w, map[string]any{"id": folder.ID, "tags": folder.Tags})
 	default:
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method not allowed")
 	}

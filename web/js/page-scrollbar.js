@@ -165,8 +165,8 @@ function createOverlayScrollbar(root, scroller) {
   thumb.addEventListener('pointerup', onThumbPointerUp);
   thumb.addEventListener('pointercancel', onThumbPointerUp);
   bar.addEventListener('pointerdown', onBarPointerDown);
-  document.body.addEventListener('htmx:afterSwap', onScrollOrResize);
-  document.body.addEventListener('htmx:afterSettle', onScrollOrResize);
+  document.body.addEventListener('htmx:after:swap', onScrollOrResize);
+  document.body.addEventListener('htmx:after:settle', onScrollOrResize);
 
   const mo =
     typeof MutationObserver !== 'undefined' ? new MutationObserver(onScrollOrResize) : null;
@@ -193,8 +193,8 @@ function createOverlayScrollbar(root, scroller) {
       thumb.removeEventListener('pointerup', onThumbPointerUp);
       thumb.removeEventListener('pointercancel', onThumbPointerUp);
       bar.removeEventListener('pointerdown', onBarPointerDown);
-      document.body.removeEventListener('htmx:afterSwap', onScrollOrResize);
-      document.body.removeEventListener('htmx:afterSettle', onScrollOrResize);
+      document.body.removeEventListener('htmx:after:swap', onScrollOrResize);
+      document.body.removeEventListener('htmx:after:settle', onScrollOrResize);
     },
   };
 }

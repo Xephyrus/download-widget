@@ -7,30 +7,17 @@
       <span class="folder-icon" aria-hidden="true">ID</span>
       <a href="/artworks/{{urlquery .ID}}" class="folder-link">{{.Name}}</a>
     </div>
+  </td>
+  <td data-label="标签">
     {{if .Tags}}
     <div class="tag-list">
       {{range .Tags}}
       <a class="tag-chip" href="/?tag={{urlquery .}}" title="按标签筛选">{{.}}</a>
       {{end}}
     </div>
+    {{else}}
+    <span class="tags-empty tags-empty--inline">—</span>
     {{end}}
-  </td>
-  <td data-label="标签">
-    <details class="tag-edit">
-      <summary class="action-btn tag-edit-btn">编辑标签</summary>
-      <form
-        class="tag-edit-form"
-        hx-post="/partials/folders/{{urlpath .ID}}/tags"
-        hx-include="#listFilters"
-        hx-vals='refreshList:1'
-        hx-target="#tableBody"
-        hx-swap="innerHTML settle:0s"
-        hx-indicator="#tableContainer"
-      >
-        <input type="text" name="tags" value="{{joinTags .Tags}}" placeholder="逗号分隔，如：风景, 角色" autocomplete="off" />
-        <button type="submit" class="btn btn-primary">保存</button>
-      </form>
-    </details>
   </td>
   <td data-label="文件数"><span class="badge">{{.FileCount}} 个文件</span></td>
   <td class="size-cell" data-label="大小">{{formatSize .Size}}</td>

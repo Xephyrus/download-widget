@@ -123,38 +123,43 @@
 {{end}}
 
 {{define "folder_tags_panel"}}
-<div class="tags-panel" id="tagsPanel">
+<div
+  class="tags-panel"
+  id="tagsPanel"
+  data-tags-editor
+  data-folder-id="{{.ID}}"
+>
   <div class="tags-panel-head">
-    <h2 class="panel-title">标签</h2>
-    <p class="panel-desc">用逗号分隔多个标签；保存后可在图库按标签筛选。</p>
+    <div class="tags-panel-titles">
+      <h2 class="tags-panel-title">标签</h2>
+      <p class="tags-panel-desc">回车添加，点 × 移除；变更会自动保存。</p>
+    </div>
+    <p class="tags-status" data-tags-status role="status" hidden></p>
   </div>
-  {{if .Tags}}
-  <div class="tag-list tag-list--lg">
-    {{range .Tags}}
-    <a class="tag-chip" href="/?tag={{urlquery .}}">{{.}}</a>
-    {{end}}
+  <div class="tag-composer">
+    <input type="hidden" value="{{joinTags .Tags}}" data-tags-value />
+    <div class="tag-chip-row" data-tags-chips aria-live="polite">
+      {{range .Tags}}
+      <span class="tag-chip tag-chip--editable" data-tag="{{.}}">
+        <span class="tag-chip-text">{{.}}</span>
+        <button type="button" class="tag-chip-remove" data-tag-remove="{{.}}" title="移除「{{.}}」" aria-label="移除标签 {{.}}"><span class="gg-close" aria-hidden="true"></span></button>
+      </span>
+      {{else}}
+      <span class="tags-empty tags-empty--inline">尚未添加标签</span>
+      {{end}}
+    </div>
+    <div class="tags-undo" data-tags-undo hidden></div>
+    <div class="tag-composer-row">
+      <input
+        id="artworkTagsInput"
+        type="text"
+        data-tags-input
+        placeholder="输入标签后按回车"
+        autocomplete="off"
+        maxlength="32"
+      />
+    </div>
   </div>
-  {{else}}
-  <p class="tags-empty">尚未添加标签</p>
-  {{end}}
-  <form
-    class="tag-edit-form tag-edit-form--inline"
-    hx-post="/partials/folders/{{urlpath .ID}}/tags"
-    hx-target="#tagsPanel"
-    hx-swap="outerHTML"
-  >
-    <label class="field-label" for="artworkTagsInput">编辑标签</label>
-    <input
-      id="artworkTagsInput"
-      type="text"
-      name="tags"
-      value="{{joinTags .Tags}}"
-      placeholder="例如：风景, 人像, 未分类"
-      autocomplete="off"
-      list="allTagsList"
-    />
-    <button type="submit" class="btn btn-primary">保存标签</button>
-  </form>
 </div>
 {{end}}
 

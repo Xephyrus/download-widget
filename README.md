@@ -7,15 +7,16 @@
 
 ## 功能概览
 
-- **图库列表**：筛选、排序、分页；删除文件夹并同步索引
-- **批量下载**：填写原图 URL / Cookie / 任务名；WebSocket 实时日志与进度条；可中断；支持「重新下载」（清空同任务目录后重下）
-- **作品画廊**：缩略图 + Fancybox；支持从作品页跳转重新下载
-- **磁盘同步**：启动时可扫描 `DOWNLOAD_DIR` 重建索引；空目录 / 错误路径不会误清空已有索引
+- **图库列表**：搜索 / 标签 / 排序 / 分页；筛选条件写入地址栏，刷新后保持；列表中标签仅展示并可点选筛选；删除文件夹并同步索引
+- **作品标签**：作品页芯片编辑；回车添加、点 × 移除（可短时撤销）；变更自动保存到数据库；支持多标签
+- **批量下载**：填写原图 URL / Cookie / 任务名；WebSocket 实时日志与进度条；可中断；支持「重新下载」（清空同任务目录后重下）；无固定下载数量上限
+- **作品画廊**：缩略图 + Fancybox（Hash 深链）；可从作品页跳转重新下载
+- **磁盘同步**：启动时可扫描 `DOWNLOAD_DIR` 重建索引（保留自定义名称与标签）；空目录 / 错误路径不会误清空已有索引
 
 ## 环境
 
-- Go 1.26+
-- 访问 Pixiv 时默认走本地代理 `127.0.0.1:7897`（可用环境变量修改）
+- Go 1.27+（见 `go.mod`）
+- 访问 Pixiv 时默认走本地代理 `127.0.0.1:7897`（可用环境变量或下载页端口选择修改）
 
 ## 快速开始
 
@@ -55,9 +56,11 @@ export SYNC_ON_START=1
 
 | 路径 | 说明 |
 | --- | --- |
-| `/` | 图库列表（筛选 / 排序 / 分页） |
+| `/` | 图库列表（筛选 / 排序 / 分页；查询参数可分享、可刷新保持） |
 | `/download` | 批量下载（表单 + `hx-ws` 日志） |
-| `/artworks/:id` | 作品画廊（缩略图 + Fancybox） |
+| `/artworks/:id` | 作品画廊 + 标签编辑 |
+
+常用列表 URL 示例：`/?search=关键词`、`/?tag=标签名`、`/?tag=标签名&page=2`。
 
 ## 持久化运行
 
@@ -80,6 +83,8 @@ copy config.env.example config.env
 ./scripts/start.ps1    # 按 config.env 后台运行，输出到 logs/
 ./scripts/stop.ps1     # 结束 pixiv-downloader 进程
 ```
+
+若手动删改了下载目录中的图片，而 `SYNC_ON_START=0`，可临时设 `SYNC_ON_START=1` 后重启一次以重建文件索引（标签等自定义元数据会保留）。
 
 ### 3. Windows：开机（登录）自启
 
@@ -132,14 +137,14 @@ config.env.example      # 环境变量模板（复制为 config.env）
 scripts/                # 后台启动 / 计划任务自启 / systemd 单元
 internal/
   config/               # 环境变量
-  db/                   # bbolt 索引与 SyncFromDisk
+  db/                   # bbolt 索引、标签、SyncFromDisk
   downloader/           # Pixiv 批量下载
   safepath/             # 路径 / 文件名校验
-  server/               # HTTP、HTMX partial、WS、缩略图
+  server/               # HTTP、HTMX partial、WS、缩略图、标签 API
 web/
   *.html                # 页面
   app.css
-  js/                   # ES Module（theme / scrollbar / 各页入口）
+  js/                   # ES Module（boot / theme / scrollbar / list / artworks / tags-editor / downloader）
   vendor/               # htmx、hx-ws、fancybox（官方原版，不改源码）
 ```
 
@@ -156,7 +161,7 @@ web/
 | `WEB_DIR` | `./web` | 静态前端目录 |
 | `DOWNLOAD_DELAY_MS` | `1000` | 下载间隔 |
 | `DOWNLOAD_TIMEOUT_SEC` | `30` | 单请求超时 |
-| `SYNC_ON_START` | `1` | 启动时同步磁盘→数据库，并压缩库文件；设 `0` 可跳过 |
+| `SYNC_ON_START` | `1`（示例配置常为 `0`） | 启动时同步磁盘→数据库，并压缩库文件；设 `0` 可跳过 |
 
 说明：
 
@@ -165,16 +170,19 @@ web/
 - Cookie 仅通过请求头 `X-Pixiv-Cookie` 或表单字段传递，不支持 `?cookie=`。
 - **务必设置正确的 `DOWNLOAD_DIR`**。同步会清理「磁盘上已不存在」的索引项；若扫描结果为空但库中仍有记录，会跳过清理，避免误清空索引。同步失败时不会执行 Compact。
 - 下载页可选择代理端口 `7897` / `7890`，或「自动检测」；无需改 `PROXY_PORT` 重启服务。
+- 标签最多 20 个，单标签最长 32 字符（去重、去首尾空白）。
 
 ## 前端
 
 - 入口：`web/js/list.js`、`artworks.js`、`downloader.js`（`type="module"`）
 - 公共：`boot.js` → 主题 + 自定义滚动条（移动端改用系统滚动条）
+- 标签：`tags-editor.js`（作品页自动保存；仅 × 可移除，支持短时撤销）
 - 交互：
-  - 列表 / 删除 / 画廊：HTMX partial
+  - 列表 / 删除 / 画廊：HTMX partial；列表筛选用 `history.replaceState` 同步到 `/?…`
   - 下载页：HTMX 4 官方扩展 [`hx-ws`](https://four.htmx.org/extensions/hx-ws)（`hx-ws:connect="/ws"`）
   - 后台标签页不断开：通过官方配置 `ws.pauseOnBackground:false`（`<meta name="htmx-config">` / `hx-config`），不修改 `vendor/hx-ws.min.js`
-  - 作品页：Fancybox（Hash 深链）
+  - 作品页：Fancybox（Hash 深链）+ 标签编辑器
+- 缓存：`/static/vendor/` 长缓存；应用 `js` / `css` 为 `no-cache`，入口脚本另带 `?v=` 版本号
 
 ## 主要路由
 
@@ -182,6 +190,8 @@ web/
 
 - `GET /partials/list` — 列表行、统计、分页
 - `DELETE /partials/folders/:id` — 删除后刷新列表
+- `GET /partials/folders/:id/tags` — 作品标签面板 HTML
+- `POST /partials/folders/:id/tags` — 保存标签（表单；也可返回列表 partial）
 - `POST /partials/download` — 提交下载
 - `POST /partials/download/cancel` — 中断下载
 - `GET /partials/artworks/:id` — 画廊 HTML
@@ -191,11 +201,13 @@ web/
 
 - `GET /thumb/:id/:file?w=` — 缩略图
 - `GET /download/:id/:file` — 原图文件
-- `GET /static/...` — 静态资源（带缓存；前端资源用 `?v=` 版本号）
+- `GET /static/...` — 静态资源
 
-**JSON（调试 / 辅助）**
+**JSON**
 
 - `GET /api/list`
+- `GET /api/tags` — 全部标签（去重）
+- `GET|POST|PUT /api/folders/:id/tags` — 读写作品标签（JSON 或表单）
 - `POST /api/download`
 - `GET /api/artworks/:id`
 - `GET /api/artwork-id/:id`（需 Cookie 头；下载页自动填充 URL / 页数）
@@ -207,6 +219,12 @@ web/
 - 任务状态带 `data-download-task` / `data-download-state`，完成时更新徽章与完成提示
 - 从作品页带 `?taskName=&redownload=1` 进入时可自动填充并提交（需已保存 Cookie）
 - 「重新下载」只取消并清空**同一任务目录**，不会误伤其它任务
+
+## 作品标签要点
+
+- 作品页 `/artworks/:id`：回车或逗号添加，点 × 移除；保存走 `POST /api/folders/:id/tags`
+- 列表页标签为只读芯片，点击跳转 `/?tag=…` 筛选
+- 磁盘同步会保留已有标签；删图后需同步才会更新文件数 / 画廊文件列表
 
 ## 许可证
 

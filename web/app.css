@@ -22,10 +22,10 @@
   --warn: #e2a35a;
   --warn-bg: rgba(226, 163, 90, 0.14);
   --warn-text: #f3d2a4;
-  --danger: #e86a6a;
-  --danger-bg: rgba(232, 106, 106, 0.14);
+  --danger: #dc143c;
+  --danger-bg: rgba(220, 20, 60, 0.14);
   --danger-text: #ffc2c2;
-  --danger-border: rgba(232, 106, 106, 0.28);
+  --danger-border: rgba(220, 20, 60, 0.28);
   --ok: #4ecf8a;
   --ok-bg: rgba(78, 207, 138, 0.14);
   --ok-text: #b8f0d0;
@@ -76,10 +76,10 @@
   --warn: #c4842e;
   --warn-bg: rgba(196, 132, 46, 0.12);
   --warn-text: #8a5a12;
-  --danger: #d45252;
-  --danger-bg: rgba(212, 82, 82, 0.1);
+  --danger: #dc143c;
+  --danger-bg: rgba(220, 20, 60, 0.1);
   --danger-text: #9b2c2c;
-  --danger-border: rgba(212, 82, 82, 0.28);
+  --danger-border: rgba(220, 20, 60, 0.28);
   --ok: #2f9e66;
   --ok-bg: rgba(47, 158, 102, 0.12);
   --ok-text: #1d6b43;
@@ -2127,6 +2127,302 @@ body.page-artworks .gallery .card {
   tbody tr:not(.is-empty):hover td:last-child {
     box-shadow: none;
   }
+}
+
+/* Tags — match gallery-meta / pill / button language */
+.tags-panel {
+  margin: 4px 0 20px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tags-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.tags-panel-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tags-panel-desc {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.tags-status {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.tags-status.is-ok {
+  color: var(--ok-text, var(--text));
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, var(--border));
+}
+
+.tags-status.is-hint {
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.tags-status.is-err {
+  color: color-mix(in srgb, #b42318 80%, var(--text));
+  background: color-mix(in srgb, #f04438 12%, transparent);
+  border: 1px solid color-mix(in srgb, #f04438 28%, var(--border));
+}
+
+.tag-chip-row.is-flash .tag-chip {
+  animation: tag-flash 0.7s ease;
+}
+
+@keyframes tag-flash {
+  0% {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+  }
+  100% {
+    border-color: var(--border);
+    background: var(--surface-2);
+  }
+}
+
+.tags-save-busy {
+  display: none;
+}
+
+.tag-composer.htmx-request .tags-save-idle,
+.tags-panel.is-saving .tags-save-idle {
+  display: none;
+}
+
+.tag-composer.htmx-request .tags-save-busy,
+.tags-panel.is-saving .tags-save-busy {
+  display: inline;
+}
+
+.tag-composer.htmx-request .tags-save-btn,
+.tags-panel.is-saving .tags-save-btn {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+.tags-empty,
+.tags-empty--inline {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.tags-panel.is-saving .tags-status.is-hint {
+  opacity: 1;
+}
+
+.tag-list,
+.tag-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-list {
+  margin: 8px 0 0;
+}
+
+.tag-chip-row {
+  min-height: 32px;
+  margin-bottom: 10px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 550;
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+a.tag-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.tag-chip--editable {
+  cursor: default;
+  font: inherit;
+  user-select: none;
+}
+
+.tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-left: 2px;
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+.tag-chip-remove:hover,
+.tag-chip-remove:focus-visible {
+  opacity: 1;
+  color: #912018;
+  background: color-mix(in srgb, #f04438 28%, transparent);
+  outline: none;
+}
+
+/* css.gg close icon */
+.gg-close {
+  box-sizing: border-box;
+  position: relative;
+  display: block;
+  transform: scale(var(--ggs, 1));
+  width: 22px;
+  height: 22px;
+  border: 2px solid transparent;
+  border-radius: 40px;
+  flex: 0 0 auto;
+}
+
+.gg-close::after,
+.gg-close::before {
+  content: '';
+  display: block;
+  box-sizing: border-box;
+  position: absolute;
+  width: 16px;
+  height: 2px;
+  background: currentColor;
+  transform: rotate(45deg);
+  border-radius: 5px;
+  top: 8px;
+  left: 1px;
+}
+
+.gg-close::after {
+  transform: rotate(-45deg);
+}
+
+.tag-chip-remove .gg-close {
+  --ggs: 0.55;
+}
+
+.tags-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.tags-undo[hidden] {
+  display: none;
+}
+
+.tags-undo-btn {
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tags-undo-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+}
+
+.tag-composer-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.tag-composer-row input[type='text'] {
+  flex: 1 1 14rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.tag-composer-row .btn {
+  flex: 0 0 auto;
+  min-height: 42px;
+}
+
+.tag-edit {
+  position: relative;
+}
+
+.tag-edit > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.tag-edit > summary::-webkit-details-marker {
+  display: none;
+}
+
+.action-btn.tag-edit-btn {
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.action-btn.tag-edit-btn:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+
+.tag-composer--popover {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 10px 28px color-mix(in srgb, #000 8%, transparent);
+  min-width: min(320px, 78vw);
+  z-index: 5;
+}
+
+.folder-name .tag-list {
+  margin-top: 6px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -118,9 +118,10 @@ func (s *Server) handlePartialsFolderTags(w http.ResponseWriter, r *http.Request
 			return
 		}
 		s.rend.render(w, "folder_tags_panel", map[string]any{
-			"ID":   folder.ID,
-			"Name": folder.Name,
-			"Tags": folder.Tags,
+			"ID":    folder.ID,
+			"Name":  folder.Name,
+			"Tags":  folder.Tags,
+			"Saved": true,
 		})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
